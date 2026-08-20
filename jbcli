@@ -158,15 +158,21 @@ cmd_docker_logs() {
 
 cmd_update() {
   header "Update deployment"
-  info "Step 1/4 — git pull"
+  info "Step 1/5 — git pull"
   git pull origin main
-  info "Step 2/4 — fix backend/.env"
+  info "Step 2/5 — fix backend/.env"
   bash "$ROOT/scripts/fix-env.sh"
-  info "Step 3/4 — docker build & start (recreate to reload .env)"
-  docker compose up -d --build --force-recreate
-  info "Step 4/4 — verify"
-  sleep 10
-  run_python_ops verify || true
+  info "Step 3/5 — rebuild backend image (no cache — drops baked .env)"
+  docker compose build --no-cache backend
+  info "Step 4/5 — recreate containers"
+  docker compose up -d --force-recreate
+  info "Step 5/5 — verify"
+  sleep 15
+  if docker compose ps --status running 2>/dev/null | grep -q backend; then
+    run_python_ops verify || true
+  else
+    warn "Backend not healthy yet — check: docker compose logs backend --tail=40"
+  fi
   ok "Update complete."
 }
 

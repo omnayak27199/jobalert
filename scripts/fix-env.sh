@@ -17,7 +17,12 @@ if [[ ! -f "$ENV_FILE" ]]; then
 fi
 
 if [[ -f "$ENV_FILE" ]]; then
-  # Fix UBLIC_SITE_URL typo (missing P).
+  # Remove bad typo line entirely if present.
+  if grep -q 'UBLIC_SITE_URL' "$ENV_FILE" 2>/dev/null; then
+    sed -i '/^[[:space:]]*UBLIC_SITE_URL=/d' "$ENV_FILE"
+    echo "Removed UBLIC_SITE_URL line from backend/.env"
+  fi
+  # Fix UBLIC_SITE_URL typo (missing P) if rename form exists.
   if grep -q '^UBLIC_SITE_URL=' "$ENV_FILE" 2>/dev/null; then
     sed -i 's/^UBLIC_SITE_URL=/PUBLIC_SITE_URL=/' "$ENV_FILE"
     sed -i 's/^[[:space:]]*UBLIC_SITE_URL=/PUBLIC_SITE_URL=/' "$ENV_FILE"

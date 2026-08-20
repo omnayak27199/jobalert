@@ -32,9 +32,11 @@ openssl rand -hex 16   # use for ADMIN_SECRET
 
 ```bash
 git pull origin main
-chmod +x jbcli scripts/fix-env.sh
-./jbcli update
+chmod +x jbcli scripts/bootstrap.sh scripts/fix-env.sh
+./scripts/bootstrap.sh
 ```
+
+Or: `./jbcli update`
 
 **First time:**
 

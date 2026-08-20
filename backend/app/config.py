@@ -33,7 +33,7 @@ def _parse_cors_origins(value: object) -> List[str]:
 
 
 def _sanitize_env_typos() -> None:
-    """Map common .env typos before Settings loads (works even with old images)."""
+    """Map common .env typos before Settings loads."""
     import os
 
     if os.environ.get("UBLIC_SITE_URL") and not os.environ.get("PUBLIC_SITE_URL"):
@@ -41,8 +41,20 @@ def _sanitize_env_typos() -> None:
     os.environ.pop("UBLIC_SITE_URL", None)
 
 
+def _env_file_for_settings() -> str | None:
+    """In Docker, vars come from compose — skip baked or mounted .env file reads."""
+    import os
+
+    if os.path.exists("/.dockerenv"):
+        return None
+    return ".env"
+
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=_env_file_for_settings(),
+        extra="ignore",
+    )
 
     database_url: str = "sqlite:///./data/jobalert.db"
     fetch_interval_minutes: int = 60
