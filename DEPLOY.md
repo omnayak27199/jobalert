@@ -33,6 +33,31 @@ docker compose up -d --build
 
 Site live at: `http://YOUR_SERVER_IP:3000`
 
+### 4b. Import existing database (optional)
+If you copied `jobalert.db` to the server home directory, put it in the Docker volume:
+```bash
+docker compose up -d backend   # create volume + container name
+docker compose cp ~/jobalert.db backend:/app/data/jobalert.db
+docker compose restart backend
+```
+
+### Troubleshooting backend crash loop
+```bash
+# See why backend is restarting (most important)
+docker compose logs backend --tail=100
+
+# Config load test (works even when container is crash-looping)
+docker compose run --rm --no-deps backend python -c "from app.config import settings; print(settings.cors_origins)"
+
+# Health on the host
+curl -s http://127.0.0.1:8000/health
+```
+
+Common fixes:
+- **`ValidationError` on startup** — fix `backend/.env`; use comma-separated domains for `CORS_ORIGINS` if JSON fails, e.g. `CORS_ORIGINS=https://indiagovjob.online,https://www.indiagovjob.online`
+- **OOM / killed** — ensure `SKIP_INITIAL_FETCH=1` in `docker-compose.yml` (default in repo), then `./jbcli fetch` manually after boot
+- **502 from nginx** — backend must be healthy on port 8000; check `docker compose ps` shows `healthy`
+
 ### 5. Point domain (optional)
 - Add A record: `yourdomain.com` → server IP
 - Use Nginx reverse proxy + Let's Encrypt SSL (see below)

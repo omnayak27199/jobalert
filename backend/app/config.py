@@ -1,17 +1,43 @@
 from __future__ import annotations
 
 import json
-from typing import List, Optional
+from typing import List, Optional, Union
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
+
+
+def _parse_cors_origins(value: object) -> List[str]:
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return [str(origin).strip() for origin in value if str(origin).strip()]
+    if isinstance(value, str):
+        raw = value.strip().strip("'").strip('"')
+        if not raw:
+            return []
+        if raw.startswith("["):
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                inner = raw.strip("[]")
+                parsed = [
+                    origin.strip().strip("'").strip('"')
+                    for origin in inner.split(",")
+                    if origin.strip()
+                ]
+            if isinstance(parsed, list):
+                return [str(origin).strip() for origin in parsed if str(origin).strip()]
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return []
 
 
 class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/jobalert.db"
     fetch_interval_minutes: int = 60
     public_site_url: str = "http://localhost:3000"
-    cors_origins: List[str] = [
+    # Union prevents pydantic-settings from JSON-parsing env before our validator runs.
+    cors_origins: Union[str, List[str]] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
@@ -41,20 +67,17 @@ class Settings(BaseSettings):
     # Admin upload/fetch (set in production)
     admin_secret: Optional[str] = None
 
+    # Skip the heavy scrape on container boot (scheduled fetch still runs).
+    skip_initial_fetch: bool = False
+
     @field_validator("cors_origins", mode="before")
     @classmethod
-    def parse_cors_origins(cls, value: object) -> object:
-        if isinstance(value, str):
-            raw = value.strip()
-            if raw.startswith("["):
-                return json.loads(raw)
-            if raw:
-                return [origin.strip() for origin in raw.split(",") if origin.strip()]
-        return value
+    def parse_cors_origins(cls, value: object) -> List[str]:
+        return _parse_cors_origins(value)
 
     @model_validator(mode="after")
     def append_public_site_to_cors(self) -> "Settings":
-        origins = list(self.cors_origins)
+        origins = _parse_cors_origins(self.cors_origins)
         site = self.public_site_url.rstrip("/")
         if site and site not in origins:
             origins.append(site)

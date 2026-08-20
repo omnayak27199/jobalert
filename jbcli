@@ -1,0 +1,232 @@
+#!/usr/bin/env bash
+# jbcli — IndiaJob operations CLI
+# Usage: ./jbcli [command] [options]
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$ROOT"
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+info()  { echo -e "${CYAN}$*${NC}"; }
+ok()    { echo -e "${GREEN}$*${NC}"; }
+warn()  { echo -e "${YELLOW}$*${NC}"; }
+err()   { echo -e "${RED}$*${NC}"; }
+
+header() {
+  echo ""
+  echo -e "${BOLD}════════════════════════════════════════════════════════════${NC}"
+  echo -e "${BOLD}  $*${NC}"
+  echo -e "${BOLD}════════════════════════════════════════════════════════════${NC}"
+}
+
+usage() {
+  cat <<'EOF'
+IndiaJob CLI (jbcli)
+
+Usage: ./jbcli <command> [options]
+
+Commands:
+  info              Full system + database overview
+  config            Show backend configuration
+  db                Database statistics
+  users [--limit N]   List registered users (default 50)
+  fetch             Fetch latest jobs from all portals
+  cleanup           Run post-fetch cleanup / enrich
+  enrich [--force]  Deep-enrich job PDF sections
+  verify [all]      Health checks (API, DB, CORS, SMTP, Twilio)
+  pull              Git pull latest code
+  update            git pull + docker rebuild + restart
+  docker ps         Show container status
+  docker build      Build Docker images
+  docker up         Build and start containers (detached)
+  docker restart    Restart all containers
+  docker logs [svc] Tail logs (backend|frontend|all)
+  help              Show this help
+
+Examples:
+  ./jbcli info
+  ./jbcli users --limit 20
+  ./jbcli fetch
+  ./jbcli verify all
+  ./jbcli update
+  ./jbcli docker up
+EOF
+}
+
+docker_available() {
+  command -v docker >/dev/null 2>&1 && docker compose version >/dev/null 2>&1
+}
+
+docker_backend_running() {
+  docker_available && docker compose ps --status running 2>/dev/null | grep -q backend
+}
+
+run_python_ops() {
+  local cmd=("$@")
+  if docker_backend_running; then
+    docker compose exec -T backend python -m app.jbcli_ops "${cmd[@]}"
+  elif docker_available; then
+    warn "Backend not running — using one-off container"
+    docker compose run --rm --no-deps backend python -m app.jbcli_ops "${cmd[@]}"
+  else
+    (cd "$ROOT/backend" && python -m app.jbcli_ops "${cmd[@]}")
+  fi
+}
+
+run_backend_cli() {
+  local cmd=("$@")
+  if docker_backend_running; then
+    docker compose exec -T backend python -m app.cli "${cmd[@]}"
+  elif docker_available; then
+    warn "Backend not running — using one-off container"
+    docker compose run --rm --no-deps backend python -m app.cli "${cmd[@]}"
+  else
+    (cd "$ROOT/backend" && python -m app.cli "${cmd[@]}")
+  fi
+}
+
+cmd_info()    { run_python_ops info; }
+cmd_config()  { run_python_ops config; }
+cmd_db()      { run_python_ops db; }
+cmd_users()   { run_python_ops users "$@"; }
+cmd_verify()  { run_python_ops verify "$@"; }
+
+cmd_fetch() {
+  header "Fetch latest jobs"
+  run_backend_cli fetch
+}
+
+cmd_cleanup() {
+  header "Cleanup jobs"
+  run_backend_cli cleanup
+}
+
+cmd_enrich() {
+  header "Deep enrich jobs"
+  run_backend_cli enrich "$@"
+}
+
+cmd_pull() {
+  header "Git pull"
+  git pull origin main
+  ok "Code updated."
+}
+
+cmd_docker_ps() {
+  header "Docker status"
+  docker compose ps
+}
+
+cmd_docker_build() {
+  header "Docker build"
+  docker compose build
+  ok "Build complete."
+}
+
+cmd_docker_up() {
+  header "Docker up (build + start)"
+  docker compose up -d --build
+  sleep 3
+  docker compose ps
+}
+
+cmd_docker_restart() {
+  header "Docker restart"
+  docker compose restart
+  sleep 3
+  docker compose ps
+}
+
+cmd_docker_logs() {
+  local svc="${1:-all}"
+  header "Docker logs ($svc)"
+  case "$svc" in
+    backend)  docker compose logs -f --tail=100 backend ;;
+    frontend) docker compose logs -f --tail=100 frontend ;;
+    all|*)    docker compose logs -f --tail=80 ;;
+  esac
+}
+
+cmd_update() {
+  header "Update deployment"
+  info "Step 1/3 — git pull"
+  git pull origin main
+  info "Step 2/3 — docker build & start"
+  docker compose up -d --build
+  info "Step 3/3 — verify"
+  sleep 5
+  run_python_ops verify || true
+  ok "Update complete."
+}
+
+main() {
+  local cmd="${1:-info}"
+  shift || true
+
+  case "$cmd" in
+    help|-h|--help)
+      usage
+      ;;
+    info|status)
+      cmd_info
+      ;;
+    config)
+      cmd_config
+      ;;
+    db|database)
+      cmd_db
+      ;;
+    users|user|userlist)
+      cmd_users "$@"
+      ;;
+    fetch|update-jobs)
+      cmd_fetch
+      ;;
+    cleanup)
+      cmd_cleanup
+      ;;
+    enrich)
+      cmd_enrich "$@"
+      ;;
+    verify|check)
+      if [[ "${1:-}" == "all" ]]; then shift || true; fi
+      cmd_verify "$@"
+      ;;
+    pull|git-pull)
+      cmd_pull
+      ;;
+    update|deploy|upgrade)
+      cmd_update
+      ;;
+    docker)
+      local sub="${1:-ps}"
+      shift || true
+      case "$sub" in
+        ps|status)   cmd_docker_ps ;;
+        build)       cmd_docker_build ;;
+        up|start)    cmd_docker_up ;;
+        restart)     cmd_docker_restart ;;
+        logs)        cmd_docker_logs "${1:-all}" ;;
+        *)
+          err "Unknown docker subcommand: $sub"
+          echo "Use: ps, build, up, restart, logs"
+          exit 1
+          ;;
+      esac
+      ;;
+    *)
+      err "Unknown command: $cmd"
+      echo ""
+      usage
+      exit 1
+      ;;
+  esac
+}
+
+main "$@"

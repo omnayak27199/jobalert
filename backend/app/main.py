@@ -54,16 +54,21 @@ async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
     run_migrations()
 
-    async def _initial_fetch():
-        db = SessionLocal()
-        try:
-            await fetch_and_store_all(db)
-        except Exception as e:
-            logger.warning("Initial fetch failed: %s", e)
-        finally:
-            db.close()
+    if settings.skip_initial_fetch:
+        logger.info("Skipping initial fetch (SKIP_INITIAL_FETCH=1)")
+    else:
+        async def _initial_fetch():
+            # Let /health pass before scraping dozens of portals (avoids OOM/unhealthy on small VPS).
+            await asyncio.sleep(30)
+            db = SessionLocal()
+            try:
+                await fetch_and_store_all(db)
+            except Exception as e:
+                logger.warning("Initial fetch failed: %s", e)
+            finally:
+                db.close()
 
-    asyncio.create_task(_initial_fetch())
+        asyncio.create_task(_initial_fetch())
 
     scheduler.add_job(
         scheduled_fetch,

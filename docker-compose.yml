@@ -10,12 +10,16 @@ services:
       - ./uploads:/app/uploads
     env_file:
       - ./backend/.env
+    environment:
+      # Avoid crash/OOM loop on small VPS while scrapers warm up; scheduled fetch still runs.
+      - SKIP_INITIAL_FETCH=1
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
 
   frontend:
     build:

@@ -57,6 +57,34 @@ Open **http://localhost:3000**
 docker-compose up --build
 ```
 
+## Operations CLI (`jbcli`)
+
+From the project root:
+
+```bash
+chmod +x jbcli
+./jbcli help
+```
+
+| Command | Description |
+|---------|-------------|
+| `./jbcli info` | Full system + database overview |
+| `./jbcli config` | Backend configuration (SMTP, Twilio, CORS, etc.) |
+| `./jbcli db` | Database statistics |
+| `./jbcli users` | List registered users (`--limit 20`) |
+| `./jbcli fetch` | Fetch latest jobs from all portals |
+| `./jbcli cleanup` | Post-fetch cleanup |
+| `./jbcli enrich` | Deep-enrich job PDF sections |
+| `./jbcli verify all` | Health checks (API, DB, CORS, SMTP, Twilio) |
+| `./jbcli pull` | `git pull origin main` |
+| `./jbcli update` | pull + `docker compose up -d --build` + verify |
+| `./jbcli docker build` | Build Docker images |
+| `./jbcli docker up` | Build and start containers |
+| `./jbcli docker ps` | Container status |
+| `./jbcli docker logs backend` | Tail logs |
+
+On the GCP VM (Docker running), `jbcli` runs commands inside the backend container automatically.
+
 ## New Features (v2)
 
 ### More Scrapers
