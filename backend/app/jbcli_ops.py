@@ -262,6 +262,73 @@ def print_users(limit: int) -> None:
     print()
 
 
+def cmd_doctor() -> int:
+    """Validate backend/.env and config before Docker start."""
+    env_path = Path(__file__).resolve().parent.parent / ".env"
+    issues: list[str] = []
+    fixes: list[str] = []
+
+    _section("Environment doctor")
+    if not env_path.is_file():
+        issues.append(f"Missing {env_path}")
+        fixes.append("cp backend/.env.example backend/.env && nano backend/.env")
+    else:
+        _row("env file", env_path)
+        keys: dict[str, str] = {}
+        for raw_line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            keys[key.strip()] = value.strip()
+
+        if "UBLIC_SITE_URL" in keys:
+            issues.append("Typo: UBLIC_SITE_URL (missing P)")
+            fixes.append(f"sed -i 's/^UBLIC_SITE_URL=/PUBLIC_SITE_URL=/' {env_path}")
+        if "PUBLIC_SITE_URL" not in keys and "UBLIC_SITE_URL" not in keys:
+            issues.append("PUBLIC_SITE_URL not set (will default to localhost)")
+            fixes.append(f"echo 'PUBLIC_SITE_URL=https://indiagovjob.online' >> {env_path}")
+
+        for label, key in (
+            ("site url", "PUBLIC_SITE_URL"),
+            ("cors", "CORS_ORIGINS"),
+            ("admin", "ADMIN_SECRET"),
+        ):
+            if key in keys:
+                _row(label, keys[key][:80])
+
+    try:
+        from app.config import settings
+
+        _row("config load", "OK")
+        _row("public_site_url", settings.public_site_url)
+        _row("skip_initial_fetch", settings.skip_initial_fetch)
+        if settings.public_site_url.startswith("http://localhost"):
+            issues.append("PUBLIC_SITE_URL still localhost — set https://indiagovjob.online in .env")
+    except Exception as exc:
+        issues.append(f"Config failed to load: {exc}")
+        fixes.append("docker compose logs backend --tail=80")
+
+    if issues:
+        print()
+        for item in issues:
+            print(f"  [FAIL] {item}")
+        if fixes:
+            print("\n  Suggested fixes:")
+            for fix in fixes:
+                print(f"    {fix}")
+        print("\n  Then run:")
+        print("    docker compose up -d backend")
+        print("    docker compose logs backend --tail=50")
+        print()
+        return 1
+
+    print("\n  [PASS] Environment looks OK. Start backend with:")
+    print("    docker compose up -d backend && docker compose logs backend --tail=30")
+    print()
+    return 0
+
+
 def print_verify_json(results: list[dict[str, Any]]) -> None:
     print(json.dumps(results, indent=2))
 
@@ -334,6 +401,8 @@ def main() -> None:
     users_p = sub.add_parser("users", help="List registered users")
     users_p.add_argument("--limit", type=int, default=50)
 
+    sub.add_parser("doctor", help="Validate backend/.env before Docker start")
+
     verify_p = sub.add_parser("verify", help="Run health and config checks")
     verify_p.add_argument("--site-url", default=None, help="Public site URL to test")
 
@@ -356,6 +425,8 @@ def main() -> None:
             print(json.dumps(cmd_users_list(limit=args.limit), indent=2, default=str))
         else:
             print_users(limit=args.limit)
+    elif args.command == "doctor":
+        sys.exit(cmd_doctor())
     elif args.command == "verify":
         if args.json:
             print_verify_json(run_verify(site_url=args.site_url))

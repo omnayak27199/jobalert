@@ -40,6 +40,7 @@ Commands:
   cleanup           Run post-fetch cleanup / enrich
   enrich [--force]  Deep-enrich job PDF sections
   verify [all]      Health checks (API, DB, CORS, SMTP, Twilio)
+  doctor            Validate backend/.env before Docker start
   pull              Git pull latest code
   update            git pull + docker rebuild + restart
   docker ps         Show container status
@@ -96,6 +97,7 @@ cmd_config()  { run_python_ops config; }
 cmd_db()      { run_python_ops db; }
 cmd_users()   { run_python_ops users "$@"; }
 cmd_verify()  { run_python_ops verify "$@"; }
+cmd_doctor()  { run_python_ops doctor "$@"; }
 
 cmd_fetch() {
   header "Fetch latest jobs"
@@ -197,6 +199,9 @@ main() {
     verify|check)
       if [[ "${1:-}" == "all" ]]; then shift || true; fi
       cmd_verify "$@"
+      ;;
+    doctor|diag)
+      cmd_doctor "$@"
       ;;
     pull|git-pull)
       cmd_pull
