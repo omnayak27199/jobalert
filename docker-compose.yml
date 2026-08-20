@@ -17,6 +17,7 @@ services:
       - SKIP_INITIAL_FETCH=1
       - PUBLIC_SITE_URL=https://indiagovjob.online
       - CORS_ORIGINS=https://indiagovjob.online,https://www.indiagovjob.online,http://localhost:3000
+      - ADMIN_EMAILS=omnayak27199@gmail.com
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

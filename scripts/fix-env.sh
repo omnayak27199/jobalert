@@ -33,4 +33,9 @@ if [[ -f "$ENV_FILE" ]]; then
     echo 'PUBLIC_SITE_URL=https://indiagovjob.online' >> "$ENV_FILE"
     echo "Added PUBLIC_SITE_URL to backend/.env"
   fi
+  # Ensure admin email is configured for panel access.
+  if ! grep -q '^ADMIN_EMAILS=' "$ENV_FILE" 2>/dev/null; then
+    echo 'ADMIN_EMAILS=omnayak27199@gmail.com' >> "$ENV_FILE"
+    echo "Added ADMIN_EMAILS to backend/.env"
+  fi
 fi
