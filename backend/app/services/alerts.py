@@ -66,8 +66,15 @@ def _log_alert(db: Session, user_id: int, job_id: int, channel: str) -> None:
     db.add(AlertLog(user_id=user_id, job_id=job_id, channel=channel))
 
 
+def _site_url(path: str = "") -> str:
+    base = settings.site_base_url
+    if not path:
+        return base
+    return f"{base}/{path.lstrip('/')}"
+
+
 def _format_job_email(jobs: List[Job], user: User) -> str:
-    lines = ["<h2>Jobs matching your profile — IndiaJob.in</h2>", "<ul>"]
+    lines = ["<h2>Jobs matching your profile — IndiaJob</h2>", "<ul>"]
     for job in jobs:
         last = job.last_date.strftime("%d %b %Y") if job.last_date else "Check notification"
         match = score_job_for_user(job, user)
@@ -75,9 +82,9 @@ def _format_job_email(jobs: List[Job], user: User) -> str:
         lines.append(
             f"<li><strong>{job.title}</strong> ({match.score}% match — {reason})<br>"
             f"Org: {job.organization} | Last Date: {last}<br>"
-            f'<a href="https://indiajob.in/job/{job.id}">View Full Details</a></li>'
+            f'<a href="{_site_url(f"job/{job.id}")}">View Full Details</a></li>'
         )
-    lines.append("</ul><p><small>Update profile at indiajob.in/account</small></p>")
+    lines.append(f'</ul><p><small>Update profile at {_site_url("account")}</small></p>')
     return "\n".join(lines)
 
 
@@ -129,13 +136,13 @@ def send_whatsapp(phone: str, message: str) -> bool:
 
 
 def _format_whatsapp(jobs: List[Job], user: User) -> str:
-    lines = ["🔔 *IndiaJob.in — Matches for your profile*\n"]
+    lines = ["🔔 *IndiaJob — Matches for your profile*\n"]
     for job in jobs[:5]:
         last = job.last_date.strftime("%d %b %Y") if job.last_date else "See notification"
         match = score_job_for_user(job, user)
         lines.append(f"• *{job.title}* ({match.score}%)\n  {job.organization} | Last: {last}")
     if len(jobs) > 5:
-        lines.append(f"\n+{len(jobs) - 5} more at indiajob.in/account")
+        lines.append(f"\n+{len(jobs) - 5} more at {_site_url('account')}")
     return "\n".join(lines)
 
 

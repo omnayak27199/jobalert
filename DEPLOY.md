@@ -17,7 +17,7 @@ sudo usermod -aG docker $USER
 git clone <your-repo> jobalert
 cd jobalert
 cp backend/.env.example backend/.env
-nano backend/.env   # Set SECRET_KEY, ADMIN_SECRET, OPENAI_API_KEY, your domain
+nano backend/.env   # Set SECRET_KEY, ADMIN_SECRET, PUBLIC_SITE_URL, OPENAI_API_KEY, your domain
 ```
 
 Generate secrets:
@@ -143,8 +143,9 @@ sudo certbot --nginx -d indiajob.in
 ## Checklist before going live
 
 - [ ] Set `SECRET_KEY` and `ADMIN_SECRET` in `.env`
+- [ ] Set `PUBLIC_SITE_URL` to your live domain (e.g. `https://indiagovjob.online`)
 - [ ] Set `OPENAI_API_KEY` for best PDF parsing
-- [ ] Update `CORS_ORIGINS` with your domain
+- [ ] Update `CORS_ORIGINS` with your domain (or rely on `PUBLIC_SITE_URL` auto-merge)
 - [ ] Point domain to server IP
 - [ ] Enable SSL with Certbot
 - [ ] Test: `./fetch-jobs.sh` and upload a PDF at `/admin`

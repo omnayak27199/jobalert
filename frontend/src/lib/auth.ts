@@ -116,6 +116,24 @@ export function clearAuth() {
   localStorage.removeItem(USER_KEY);
 }
 
+function formatApiError(body: unknown, status: number): string {
+  if (body && typeof body === "object" && "detail" in body) {
+    const detail = (body as { detail: unknown }).detail;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) => {
+          if (item && typeof item === "object" && "msg" in item) {
+            return String((item as { msg: string }).msg);
+          }
+          return JSON.stringify(item);
+        })
+        .join("; ");
+    }
+  }
+  return `HTTP ${status}`;
+}
+
 async function authFetch<T>(
   path: string,
   options: RequestInit = {}
@@ -130,7 +148,7 @@ async function authFetch<T>(
   const res = await fetch(`/api${path}`, { ...options, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: "Request failed" }));
-    throw new Error(err.detail || `HTTP ${res.status}`);
+    throw new Error(formatApiError(err, res.status));
   }
   return res.json();
 }

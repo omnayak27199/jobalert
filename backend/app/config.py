@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 from typing import List, Optional
 
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     database_url: str = "sqlite:///./data/jobalert.db"
     fetch_interval_minutes: int = 60
+    public_site_url: str = "http://localhost:3000"
     cors_origins: List[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -28,7 +31,7 @@ class Settings(BaseSettings):
     smtp_port: int = 587
     smtp_user: Optional[str] = None
     smtp_password: Optional[str] = None
-    smtp_from: str = "alerts@indiajob.in"
+    smtp_from: str = "alerts@indiagovjob.online"
 
     # WhatsApp alerts (Twilio)
     twilio_account_sid: Optional[str] = None
@@ -37,6 +40,34 @@ class Settings(BaseSettings):
 
     # Admin upload/fetch (set in production)
     admin_secret: Optional[str] = None
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, value: object) -> object:
+        if isinstance(value, str):
+            raw = value.strip()
+            if raw.startswith("["):
+                return json.loads(raw)
+            if raw:
+                return [origin.strip() for origin in raw.split(",") if origin.strip()]
+        return value
+
+    @model_validator(mode="after")
+    def append_public_site_to_cors(self) -> "Settings":
+        origins = list(self.cors_origins)
+        site = self.public_site_url.rstrip("/")
+        if site and site not in origins:
+            origins.append(site)
+        if site.startswith("https://") and not site.startswith("https://www."):
+            www = site.replace("https://", "https://www.", 1)
+            if www not in origins:
+                origins.append(www)
+        self.cors_origins = origins
+        return self
+
+    @property
+    def site_base_url(self) -> str:
+        return self.public_site_url.rstrip("/")
 
     class Config:
         env_file = ".env"
