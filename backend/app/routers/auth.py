@@ -137,22 +137,32 @@ class MatchedJobOut(BaseModel):
 
 @router.post("/auth/register", response_model=TokenResponse)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.email == body.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-    user = User(
-        email=body.email,
-        password_hash=hash_password(body.password),
-        name=body.name,
-        phone=body.phone,
-    )
-    db.add(user)
-    db.flush()
-    db.add(UserPreferences(user_id=user.id))
-    db.add(UserProfile(user_id=user.id))
-    db.commit()
-    db.refresh(user)
-    token = create_access_token(user.id, user.email)
-    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+    try:
+        if db.query(User).filter(User.email == body.email).first():
+            raise HTTPException(status_code=400, detail="Email already registered")
+        user = User(
+            email=body.email,
+            password_hash=hash_password(body.password),
+            name=body.name,
+            phone=body.phone,
+        )
+        db.add(user)
+        db.flush()
+        db.add(UserPreferences(user_id=user.id))
+        db.add(UserProfile(user_id=user.id))
+        db.commit()
+        db.refresh(user)
+        token = create_access_token(user.id, user.email)
+        return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Registration failed for %s: %s", body.email, exc)
+        raise HTTPException(
+            status_code=500,
+            detail="Registration failed. Please try again or contact support.",
+        ) from exc
 
 
 @router.post("/auth/login", response_model=TokenResponse)

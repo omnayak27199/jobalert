@@ -31,7 +31,12 @@ async def scheduled_fetch():
 
 
 def run_migrations():
-    """Add new columns to existing SQLite DB."""
+    """Add new columns / tables to existing SQLite DB."""
+    from app.models.user import AlertLog, FavoriteJob, User, UserPreferences, UserProfile
+
+    for model in (User, UserPreferences, UserProfile, FavoriteJob, AlertLog):
+        model.__table__.create(bind=engine, checkfirst=True)
+
     cols = [
         ("full_content", "TEXT"),
         ("notification_url", "VARCHAR(1000)"),
