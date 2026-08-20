@@ -69,6 +69,8 @@ def run_migrations():
 
 def sync_admin_users():
     """Promote users listed in ADMIN_EMAILS to admin role."""
+    from app.models.user import User
+
     if not settings.admin_email_set:
         return
     db = SessionLocal()
