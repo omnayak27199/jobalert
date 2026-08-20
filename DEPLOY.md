@@ -54,6 +54,12 @@ curl -s http://127.0.0.1:8000/health
 ```
 
 Common fixes:
+- **`ValidationError` / `ublic_site_url` extra forbidden** — typo in `backend/.env`: line says `UBLIC_SITE_URL=` instead of `PUBLIC_SITE_URL=`. Fix:
+  ```bash
+  sed -i 's/^UBLIC_SITE_URL=/PUBLIC_SITE_URL=/' backend/.env
+  grep PUBLIC_SITE_URL backend/.env   # must show PUBLIC_SITE_URL=https://indiagovjob.online
+  docker compose restart backend
+  ```
 - **`ValidationError` on startup** — fix `backend/.env`; use comma-separated domains for `CORS_ORIGINS` if JSON fails, e.g. `CORS_ORIGINS=https://indiagovjob.online,https://www.indiagovjob.online`
 - **OOM / killed** — ensure `SKIP_INITIAL_FETCH=1` in `docker-compose.yml` (default in repo), then `./jbcli fetch` manually after boot
 - **502 from nginx** — backend must be healthy on port 8000; check `docker compose ps` shows `healthy`
