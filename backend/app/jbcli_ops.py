@@ -146,6 +146,29 @@ def cmd_db_stats() -> dict[str, Any]:
         db.close()
 
 
+def cmd_reset_password(email: str, password: str) -> dict[str, Any]:
+    from app.database import SessionLocal
+    from app.models.user import User
+    from app.services.auth import hash_password
+
+    if len(password) < 6:
+        raise SystemExit("Password must be at least 6 characters")
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email.strip().lower()).first()
+        if not user:
+            # case-insensitive fallback
+            user = db.query(User).filter(User.email.ilike(email.strip())).first()
+        if not user:
+            raise SystemExit(f"No user found with email: {email}")
+        user.password_hash = hash_password(password)
+        db.commit()
+        return {"status": "ok", "email": user.email, "user_id": user.id}
+    finally:
+        db.close()
+
+
 def cmd_users_list(limit: int = 50) -> list[dict[str, Any]]:
     from sqlalchemy import desc
 
@@ -401,6 +424,10 @@ def main() -> None:
     users_p = sub.add_parser("users", help="List registered users")
     users_p.add_argument("--limit", type=int, default=50)
 
+    reset_p = sub.add_parser("reset-password", help="Reset a user's password by email")
+    reset_p.add_argument("email", help="User email address")
+    reset_p.add_argument("password", help="New password (min 6 characters)")
+
     sub.add_parser("doctor", help="Validate backend/.env before Docker start")
 
     verify_p = sub.add_parser("verify", help="Run health and config checks")
@@ -425,6 +452,12 @@ def main() -> None:
             print(json.dumps(cmd_users_list(limit=args.limit), indent=2, default=str))
         else:
             print_users(limit=args.limit)
+    elif args.command == "reset-password":
+        result = cmd_reset_password(args.email, args.password)
+        if args.json:
+            print(json.dumps(result, indent=2))
+        else:
+            print(f"Password reset for {result['email']} (user #{result['user_id']})")
     elif args.command == "doctor":
         sys.exit(cmd_doctor())
     elif args.command == "verify":

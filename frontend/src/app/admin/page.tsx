@@ -14,6 +14,7 @@ import {
   Upload,
   Users,
   Wrench,
+  KeyRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
@@ -26,6 +27,7 @@ import {
   deactivateJob,
   deleteAdminUser,
   dispatchJobAlerts,
+  resetAdminUserPassword,
   fetchAdminJob,
   fetchAdminJobs,
   fetchAdminUsers,
@@ -509,23 +511,41 @@ export default function AdminPage() {
                         {new Date(u.created_at).toLocaleDateString("en-IN")}
                       </td>
                       <td className="py-2">
-                        {u.is_admin ? (
-                          <span className="text-xs text-slate-400">Protected</span>
-                        ) : (
+                        <div className="flex flex-wrap gap-1">
                           <ActionBtn
-                            label="Delete"
-                            icon={Trash2}
+                            label="Reset pwd"
+                            icon={KeyRound}
                             onClick={() => {
-                              if (!window.confirm(`Delete user ${u.email}? This cannot be undone.`)) return;
+                              const next = window.prompt(`New password for ${u.email} (min 6 chars):`);
+                              if (!next) return;
+                              if (next.length < 6) {
+                                setError("Password must be at least 6 characters");
+                                return;
+                              }
                               run(async () => {
-                                await deleteAdminUser(u.id);
-                                await loadUsers(userSearch);
-                                await loadDashboard();
-                                setMessage(`Deleted user ${u.email}`);
+                                await resetAdminUserPassword(u.id, next);
+                                setMessage(`Password reset for ${u.email}`);
                               });
                             }}
                           />
-                        )}
+                          {u.is_admin ? (
+                            <span className="text-xs text-slate-400">Protected</span>
+                          ) : (
+                            <ActionBtn
+                              label="Delete"
+                              icon={Trash2}
+                              onClick={() => {
+                                if (!window.confirm(`Delete user ${u.email}? This cannot be undone.`)) return;
+                                run(async () => {
+                                  await deleteAdminUser(u.id);
+                                  await loadUsers(userSearch);
+                                  await loadDashboard();
+                                  setMessage(`Deleted user ${u.email}`);
+                                });
+                              }}
+                            />
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))

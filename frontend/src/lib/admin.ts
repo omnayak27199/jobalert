@@ -140,6 +140,13 @@ export function deleteAdminUser(id: number) {
   });
 }
 
+export function resetAdminUserPassword(id: number, password: string) {
+  return adminFetch<{ status: string; user_id: number; email: string }>(
+    `/users/${id}/reset-password`,
+    { method: "POST", body: JSON.stringify({ password }) },
+  );
+}
+
 export function fetchAdminJobs(q?: string, active?: boolean) {
   const params = new URLSearchParams();
   if (q) params.set("q", q);

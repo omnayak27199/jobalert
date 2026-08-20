@@ -36,6 +36,7 @@ Commands:
   config            Show backend configuration
   db                Database statistics
   users [--limit N]   List registered users (default 50)
+  reset-password EMAIL PASSWORD   Reset a user's password (run on VM)
   fetch             Fetch latest jobs from all portals
   cleanup           Run post-fetch cleanup / enrich
   enrich [--force]  Deep-enrich job PDF sections
@@ -98,6 +99,7 @@ cmd_info()    { run_python_ops info; }
 cmd_config()  { run_python_ops config; }
 cmd_db()      { run_python_ops db; }
 cmd_users()   { run_python_ops users "$@"; }
+cmd_reset_password() { run_python_ops reset-password "$@"; }
 cmd_verify()  { run_python_ops verify "$@"; }
 cmd_doctor()  { run_python_ops doctor "$@"; }
 
@@ -207,6 +209,10 @@ main() {
       ;;
     users|user|userlist)
       cmd_users "$@"
+      ;;
+    reset-password|resetpwd)
+      shift || true
+      cmd_reset_password "$@"
       ;;
     fetch|update-jobs)
       cmd_fetch

@@ -16,7 +16,7 @@ from app.database import get_db
 from app.models.job import Job, JobCategory, JobScope
 from app.models.user import User
 from app.services.alerts import dispatch_alerts_for_new_jobs
-from app.services.auth import decode_token
+from app.services.auth import decode_token, hash_password
 from app.services.cleanup_service import run_cleanup
 from app.services.date_parse import parse_flexible_date
 from app.services.ingestion import _to_enum_category, _to_enum_scope, fetch_and_store_all
@@ -171,6 +171,10 @@ class AdminUserOut(BaseModel):
         from_attributes = True
 
 
+class AdminPasswordResetIn(BaseModel):
+    password: str = Field(min_length=6, max_length=128)
+
+
 def _apply_dates(job: Job, last_date: Optional[str], exam_date: Optional[str]) -> None:
     if last_date is not None:
         parsed = parse_flexible_date(last_date)
@@ -290,6 +294,21 @@ def delete_admin_user(
     db.delete(user)
     db.commit()
     return {"status": "deleted", "user_id": user_id}
+
+
+@router.post("/admin/users/{user_id}/reset-password")
+def reset_admin_user_password(
+    user_id: int,
+    body: AdminPasswordResetIn,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.password_hash = hash_password(body.password)
+    db.commit()
+    return {"status": "password_reset", "user_id": user_id, "email": user.email}
 
 
 @router.get("/admin/jobs")
