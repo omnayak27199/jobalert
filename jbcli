@@ -71,28 +71,26 @@ docker_backend_running() {
   docker_available && docker compose ps --status running 2>/dev/null | grep -q backend
 }
 
-run_python_ops() {
-  local cmd=("$@")
+docker_run_backend_py() {
+  local module="$1"
+  shift
   if docker_available; then
-    # Mount host backend/app so git pull works without rebuilding the image for CLI ops.
+    # Override entrypoint — default starts uvicorn and ignores CLI args.
     docker compose run --rm --no-deps \
+      --entrypoint python \
       -v "$ROOT/backend/app:/app/app:ro" \
-      backend python -m app.jbcli_ops "${cmd[@]}"
+      backend -m "$module" "$@"
   else
-    (cd "$ROOT/backend" && python -m app.jbcli_ops "${cmd[@]}")
+    (cd "$ROOT/backend" && python -m "$module" "$@")
   fi
 }
 
+run_python_ops() {
+  docker_run_backend_py app.jbcli_ops "$@"
+}
+
 run_backend_cli() {
-  local cmd=("$@")
-  if docker_backend_running; then
-    docker compose exec -T backend python -m app.cli "${cmd[@]}"
-  elif docker_available; then
-    warn "Backend not running — using one-off container"
-    docker compose run --rm --no-deps backend python -m app.cli "${cmd[@]}"
-  else
-    (cd "$ROOT/backend" && python -m app.cli "${cmd[@]}")
-  fi
+  docker_run_backend_py app.cli "$@"
 }
 
 cmd_info()    { run_python_ops info; }
