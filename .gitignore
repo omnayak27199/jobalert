@@ -1,0 +1,30 @@
+# Secrets — never commit
+backend/.env
+frontend/.env
+frontend/.env.local
+
+# Database & uploads
+backend/data/*.db
+backend/data/*.db-journal
+uploads/
+
+# Python
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/out/
+
+# Logs & OS
+*.log
+.DS_Store
+fetch-now.log
+
+# IDE
+.idea/
+.vscode/
