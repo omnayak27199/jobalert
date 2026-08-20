@@ -317,8 +317,8 @@ def cmd_doctor() -> int:
             print("\n  Suggested fixes:")
             for fix in fixes:
                 print(f"    {fix}")
-        print("\n  Then run:")
-        print("    docker compose up -d backend")
+        print("\n  Then recreate containers (restart does NOT reload .env):")
+        print("    docker compose up -d --build --force-recreate backend")
         print("    docker compose logs backend --tail=50")
         print()
         return 1
