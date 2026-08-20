@@ -68,7 +68,8 @@ curl -s http://127.0.0.1:8000/health
 ```
 
 Common fixes:
-- **Backend unhealthy after pull** — run `./jbcli update` (pull + fix .env + rebuild). Or: `./scripts/fix-env.sh && docker compose up -d --build`
+- **Backend unhealthy after pull** — run `./jbcli update` (pull + fix .env + rebuild). Or: `./scripts/fix-env.sh && docker compose up -d --build --force-recreate`
+- **Fixed .env but still `ublic_site_url` error** — `docker compose restart` keeps old env; run `docker compose up -d --force-recreate backend`
 - **`ValidationError` on startup** — run `./scripts/fix-env.sh`; production URLs are also set in `docker-compose.yml`
 - **OOM / killed** — ensure `SKIP_INITIAL_FETCH=1` in `docker-compose.yml` (default in repo), then `./jbcli fetch` manually after boot
 - **502 from nginx** — backend must be healthy on port 8000; check `docker compose ps` shows `healthy`
