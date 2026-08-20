@@ -51,6 +51,7 @@ Commands:
   docker up         Build and start containers (detached)
   docker restart    Restart all containers
   docker logs [svc] Tail logs (backend|frontend|all)
+  recover           Restart stack and check health (502/504 fix)
   help              Show this help
 
 Examples:
@@ -237,6 +238,9 @@ main() {
     fix-env|init)
       bash "$ROOT/scripts/fix-env.sh"
       ok "Environment fixed."
+      ;;
+    recover|fix-site|restart)
+      bash "$ROOT/scripts/recover-site.sh"
       ;;
     docker)
       local sub="${1:-ps}"
