@@ -9,10 +9,14 @@ services:
       - jobalert-data:/app/data
       - ./uploads:/app/uploads
     env_file:
-      - ./backend/.env
+      - ./backend/.env.docker
+      - path: ./backend/.env
+        required: false
     environment:
-      # Avoid crash/OOM loop on small VPS while scrapers warm up; scheduled fetch still runs.
+      # Production defaults — override any typo in backend/.env
       - SKIP_INITIAL_FETCH=1
+      - PUBLIC_SITE_URL=https://indiagovjob.online
+      - CORS_ORIGINS=https://indiagovjob.online,https://www.indiagovjob.online,http://localhost:3000
     restart: always
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

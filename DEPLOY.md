@@ -27,11 +27,25 @@ openssl rand -hex 16   # use for ADMIN_SECRET
 ```
 
 ### 4. Deploy
+
+**Production VM (already set up — just pull):**
+
 ```bash
-docker compose up -d --build
+git pull origin main
+chmod +x jbcli scripts/fix-env.sh
+./jbcli update
 ```
 
-Site live at: `http://YOUR_SERVER_IP:3000`
+**First time:**
+
+```bash
+docker compose up -d --build
+curl -s http://127.0.0.1:8000/health
+```
+
+Site live at: `http://YOUR_SERVER_IP:3000` or `https://indiagovjob.online`
+
+Production URLs are baked into `docker-compose.yml` and `backend/.env.docker` — backend will start even if `backend/.env` has typos (auto-fixed on boot).
 
 ### 4b. Import existing database (optional)
 If you copied `jobalert.db` to the server home directory, put it in the Docker volume:
@@ -54,13 +68,8 @@ curl -s http://127.0.0.1:8000/health
 ```
 
 Common fixes:
-- **`ValidationError` / `ublic_site_url` extra forbidden** — typo in `backend/.env`: line says `UBLIC_SITE_URL=` instead of `PUBLIC_SITE_URL=`. Fix:
-  ```bash
-  sed -i 's/^UBLIC_SITE_URL=/PUBLIC_SITE_URL=/' backend/.env
-  grep PUBLIC_SITE_URL backend/.env   # must show PUBLIC_SITE_URL=https://indiagovjob.online
-  docker compose restart backend
-  ```
-- **`ValidationError` on startup** — fix `backend/.env`; use comma-separated domains for `CORS_ORIGINS` if JSON fails, e.g. `CORS_ORIGINS=https://indiagovjob.online,https://www.indiagovjob.online`
+- **Backend unhealthy after pull** — run `./jbcli update` (pull + fix .env + rebuild). Or: `./scripts/fix-env.sh && docker compose up -d --build`
+- **`ValidationError` on startup** — run `./scripts/fix-env.sh`; production URLs are also set in `docker-compose.yml`
 - **OOM / killed** — ensure `SKIP_INITIAL_FETCH=1` in `docker-compose.yml` (default in repo), then `./jbcli fetch` manually after boot
 - **502 from nginx** — backend must be healthy on port 8000; check `docker compose ps` shows `healthy`
 

@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 from typing import List, Optional, Union
 
-from pydantic import field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,12 +32,24 @@ def _parse_cors_origins(value: object) -> List[str]:
     return []
 
 
+def _sanitize_env_typos() -> None:
+    """Map common .env typos before Settings loads (works even with old images)."""
+    import os
+
+    if os.environ.get("UBLIC_SITE_URL") and not os.environ.get("PUBLIC_SITE_URL"):
+        os.environ["PUBLIC_SITE_URL"] = os.environ["UBLIC_SITE_URL"]
+    os.environ.pop("UBLIC_SITE_URL", None)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     database_url: str = "sqlite:///./data/jobalert.db"
     fetch_interval_minutes: int = 60
-    public_site_url: str = "http://localhost:3000"
+    public_site_url: str = Field(
+        default="http://localhost:3000",
+        validation_alias=AliasChoices("PUBLIC_SITE_URL", "UBLIC_SITE_URL", "public_site_url"),
+    )
     # Union prevents pydantic-settings from JSON-parsing env before our validator runs.
     cors_origins: Union[str, List[str]] = [
         "http://localhost:3000",
@@ -95,22 +106,6 @@ class Settings(BaseSettings):
     def site_base_url(self) -> str:
         return self.public_site_url.rstrip("/")
 
-def _validate_env_file() -> None:
-    """Catch common .env typos before Settings silently ignores them."""
-    env_path = Path(__file__).resolve().parent.parent / ".env"
-    if not env_path.is_file():
-        return
-    for raw_line in env_path.read_text(encoding="utf-8", errors="replace").splitlines():
-        line = raw_line.strip()
-        if not line or line.startswith("#"):
-            continue
-        key = line.split("=", 1)[0].strip()
-        if key == "UBLIC_SITE_URL":
-            raise RuntimeError(
-                "backend/.env typo: use PUBLIC_SITE_URL (missing leading P). "
-                f"Fix: sed -i 's/^UBLIC_SITE_URL=/PUBLIC_SITE_URL=/' {env_path}"
-            )
 
-
-_validate_env_file()
+_sanitize_env_typos()
 settings = Settings()
