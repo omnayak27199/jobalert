@@ -15,7 +15,7 @@ import {
 import { getJobs, getStats } from "@/lib/api";
 import { PRIMARY_JOB_CATEGORY } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 export default async function HomePage() {
   let stats = {

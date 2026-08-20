@@ -1,5 +1,3 @@
-"use client";
-
 import type { ReactNode } from "react";
 import { ExternalLink, FileText } from "lucide-react";
 import type { DateRow, Job, JobAdvertisementSections } from "@/lib/types";

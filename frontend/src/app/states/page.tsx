@@ -4,7 +4,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { getStates } from "@/lib/api";
 import { INDIAN_STATES } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
 export default async function StatesPage() {
   let stateCounts: Awaited<ReturnType<typeof getStates>> = [];

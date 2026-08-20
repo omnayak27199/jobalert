@@ -3,7 +3,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { getJobs } from "@/lib/api";
 import { PRIMARY_JOB_CATEGORY } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 interface PageProps {
   params: Promise<{ state: string }>;

@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import logging
 import re
+import time
 from datetime import datetime, timedelta
 from typing import Any, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
 from sqlalchemy import desc, func, or_, text
 from sqlalchemy.orm import Session
@@ -29,6 +30,33 @@ from app.services.official_urls import resolve_apply_url, resolve_official_url, 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+_stats_cache: tuple[float, "StatsOut"] | None = None
+STATS_CACHE_TTL_SECONDS = 60
+
+
+class JobListOut(BaseModel):
+    """Lightweight job payload for list/card views (no sections or full content)."""
+
+    id: int
+    title: str
+    organization: str
+    category: str
+    scope: str
+    state: Optional[str]
+    vacancies: Optional[int]
+    apply_url: Optional[str]
+    source_name: str
+    published_date: Optional[datetime]
+    last_date: Optional[datetime]
+    qualification: Optional[str]
+    is_verified: bool
+    days_left: Optional[int] = None
+    application_status: str = "unknown"
+    days_since_closed: Optional[int] = None
+
+    class Config:
+        from_attributes = True
 
 
 class JobOut(BaseModel):
@@ -134,23 +162,52 @@ def _job_to_out(job: Job, *, deep_sections: bool = False) -> JobOut:
     )
 
 
+def _job_to_list_out(job: Job) -> JobListOut:
+    window = compute_application_window(job.last_date)
+    apply_url = sanitize_external_url(job.apply_url, job.organization, job.title)
+    if window["status"] == "closed":
+        apply_url = None
+    return JobListOut(
+        id=job.id,
+        title=job.title,
+        organization=job.organization,
+        category=job.category.value,
+        scope=job.scope.value,
+        state=job.state,
+        vacancies=job.vacancies,
+        apply_url=apply_url,
+        source_name=job.source_name,
+        published_date=job.published_date,
+        last_date=job.last_date,
+        qualification=job.qualification,
+        is_verified=job.is_verified,
+        days_left=window["days_left"],
+        application_status=window["status"],
+        days_since_closed=window["days_since_closed"],
+    )
+
+
 def _apply_listable_date_filter(query):
     """Open jobs + recently closed (within grace period). Jobs without dates stay visible."""
     cutoff = closed_visibility_cutoff()
     return query.filter((Job.last_date.is_(None)) | (Job.last_date >= cutoff))
 
 
-@router.get("/jobs", response_model=List[JobOut])
+@router.get("/jobs", response_model=List[JobListOut])
 def list_jobs(
+    response: Response,
+    db: Session = Depends(get_db),
     category: Optional[str] = None,
     state: Optional[str] = None,
     scope: Optional[str] = None,
     search: Optional[str] = None,
+    organization: Optional[str] = None,
     closing_soon: bool = False,
     limit: int = Query(default=50, le=200),
     offset: int = 0,
-    db: Session = Depends(get_db),
 ):
+    response.headers["Cache-Control"] = "public, max-age=60"
+
     query = db.query(Job).filter(Job.is_active == True)  # noqa: E712
     query = _apply_listable_date_filter(query)
 
@@ -166,6 +223,11 @@ def list_jobs(
 
     if scope:
         query = query.filter(Job.scope == scope)
+
+    if organization:
+        org = organization.strip()
+        if org:
+            query = query.filter(Job.organization.ilike(f"%{org}%"))
 
     if search:
         clauses = []
@@ -185,9 +247,11 @@ def list_jobs(
             Job.last_date >= datetime.utcnow(),
         )
 
-    jobs = query.order_by(desc(Job.published_date)).offset(offset).limit(limit).all()
+    fetch_limit = min(limit * 2, 200)
+    jobs = query.order_by(desc(Job.published_date)).offset(offset).limit(fetch_limit).all()
     jobs = [j for j in jobs if is_publishable_job(j) and is_job_listable(j.last_date)]
-    return [_job_to_out(j) for j in jobs]
+    jobs = jobs[:limit]
+    return [_job_to_list_out(j) for j in jobs]
 
 
 def _ensure_full_content(job: Job) -> None:
@@ -238,8 +302,10 @@ def _background_deep_enrich(job_id: int) -> None:
 async def get_job(
     job_id: int,
     background_tasks: BackgroundTasks,
+    response: Response,
     db: Session = Depends(get_db),
 ):
+    response.headers["Cache-Control"] = "public, max-age=120"
     job = db.query(Job).filter(Job.id == job_id, Job.is_active == True).first()  # noqa: E712
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -285,7 +351,14 @@ def list_news(
 
 
 @router.get("/stats", response_model=StatsOut)
-def get_stats(db: Session = Depends(get_db)):
+def get_stats(response: Response, db: Session = Depends(get_db)):
+    global _stats_cache
+    response.headers["Cache-Control"] = "public, max-age=60"
+
+    now = time.time()
+    if _stats_cache and now - _stats_cache[0] < STATS_CACHE_TTL_SECONDS:
+        return _stats_cache[1]
+
     notif = JobCategory.NOTIFICATION
     cutoff = closed_visibility_cutoff()
     base_jobs = (
@@ -300,27 +373,30 @@ def get_stats(db: Session = Depends(get_db)):
     jobs = [j for j in base_jobs if is_publishable_job(j)]
     total = len(jobs)
     week_later = datetime.utcnow() + timedelta(days=7)
-    now = datetime.utcnow()
+    now_dt = datetime.utcnow()
     closing = sum(
         1
         for j in jobs
-        if j.last_date is not None and now <= j.last_date <= week_later
+        if j.last_date is not None and now_dt <= j.last_date <= week_later
     )
     today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
     today_count = sum(1 for j in jobs if j.created_at and j.created_at >= today)
     states = len({j.state for j in jobs if j.state})
     verified = sum(1 for j in jobs if j.is_verified)
-    return StatsOut(
+    result = StatsOut(
         total_jobs=total,
         closing_soon=closing,
         today_updates=today_count,
         states_covered=states,
         verified_jobs=verified,
     )
+    _stats_cache = (now, result)
+    return result
 
 
 @router.get("/states")
-def list_states(db: Session = Depends(get_db)):
+def list_states(response: Response, db: Session = Depends(get_db)):
+    response.headers["Cache-Control"] = "public, max-age=120"
     cutoff = closed_visibility_cutoff()
     states = (
         db.query(Job.state, func.count(Job.id).label("count"))

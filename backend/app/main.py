@@ -51,6 +51,15 @@ def run_migrations():
                 conn.commit()
             except Exception:
                 pass
+        for idx_sql in (
+            "CREATE INDEX IF NOT EXISTS ix_jobs_published_date ON jobs (published_date)",
+            "CREATE INDEX IF NOT EXISTS ix_jobs_active_category_lastdate ON jobs (is_active, category, last_date)",
+        ):
+            try:
+                conn.execute(text(idx_sql))
+                conn.commit()
+            except Exception:
+                pass
 
 
 @asynccontextmanager

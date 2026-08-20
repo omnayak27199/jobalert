@@ -2,7 +2,7 @@ import { NewsList } from "@/components/NewsCard";
 import { SectionHeader } from "@/components/SectionHeader";
 import { getNews } from "@/lib/api";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
 export default async function NewsPage() {
   let news: Awaited<ReturnType<typeof getNews>> = [];

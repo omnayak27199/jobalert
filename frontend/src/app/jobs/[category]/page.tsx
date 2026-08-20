@@ -4,7 +4,7 @@ import { SectionHeader } from "@/components/SectionHeader";
 import { getJobs } from "@/lib/api";
 import { CATEGORY_LABELS, PRIMARY_JOB_CATEGORY, type JobCategory } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 interface PageProps {
   params: Promise<{ category: string }>;

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { Suspense } from "react";
+import type { Metadata } from "next";
 import {
   ArrowLeft,
   BadgeCheck,
@@ -19,10 +21,23 @@ import {
 import type { Job, JobAdvertisementSections, JobCategory } from "@/lib/types";
 import { CATEGORY_LABELS } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
 interface PageProps {
   params: Promise<{ id: string }>;
+}
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const job = await getJob(Number(id));
+    return {
+      title: `${job.title} | IndiaJob`,
+      description: `${job.organization} recruitment — vacancies, last date, eligibility and official apply link.`,
+    };
+  } catch {
+    return { title: "Job Notification | IndiaJob" };
+  }
 }
 
 function resolvePdfUrl(job: Job, sections: JobAdvertisementSections | null | undefined): string | null {
@@ -213,7 +228,19 @@ export default async function JobDetailPage({ params }: PageProps) {
         <JobAdvertisement sections={sections} job={job} />
         {job.organization && (
           <div className="mt-8">
-            <RelatedJobs organization={job.organization} excludeId={job.id} />
+            <Suspense
+              fallback={
+                <div className="card-shadow animate-pulse rounded-xl border border-slate-200 bg-white p-5">
+                  <div className="h-4 w-40 rounded bg-slate-200" />
+                  <div className="mt-3 space-y-2">
+                    <div className="h-3 w-full rounded bg-slate-100" />
+                    <div className="h-3 w-5/6 rounded bg-slate-100" />
+                  </div>
+                </div>
+              }
+            >
+              <RelatedJobs organization={job.organization} excludeId={job.id} />
+            </Suspense>
           </div>
         )}
       </div>
