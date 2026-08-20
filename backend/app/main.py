@@ -6,7 +6,7 @@ from pathlib import Path
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from sqlalchemy import text
+from sqlalchemy import func, text
 
 from app.config import settings
 from app.database import Base, SessionLocal, engine
@@ -60,6 +60,30 @@ def run_migrations():
                 conn.commit()
             except Exception:
                 pass
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_admin BOOLEAN DEFAULT 0"))
+            conn.commit()
+        except Exception:
+            pass
+
+
+def sync_admin_users():
+    """Promote users listed in ADMIN_EMAILS to admin role."""
+    if not settings.admin_email_set:
+        return
+    db = SessionLocal()
+    try:
+        changed = False
+        for email in settings.admin_email_set:
+            user = db.query(User).filter(func.lower(User.email) == email).first()
+            if user and not user.is_admin:
+                user.is_admin = True
+                changed = True
+        if changed:
+            db.commit()
+            logger.info("Synced admin role for configured ADMIN_EMAILS")
+    finally:
+        db.close()
 
 
 @asynccontextmanager
@@ -67,6 +91,7 @@ async def lifespan(app: FastAPI):
     Path("data").mkdir(exist_ok=True)
     Base.metadata.create_all(bind=engine)
     run_migrations()
+    sync_admin_users()
 
     if settings.skip_initial_fetch:
         logger.info("Skipping initial fetch (SKIP_INITIAL_FETCH=1)")

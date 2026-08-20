@@ -15,6 +15,7 @@ from app.models.user import FavoriteJob, User, UserPreferences, UserProfile
 from app.services.profile_service import apply_profile_fields
 from app.services.auth import (
     create_access_token,
+    email_is_admin,
     get_current_user,
     hash_password,
     verify_password,
@@ -50,6 +51,7 @@ class UserOut(BaseModel):
     email: str
     name: str
     phone: Optional[str]
+    is_admin: bool = False
 
     class Config:
         from_attributes = True
@@ -145,6 +147,7 @@ def register(body: RegisterRequest, db: Session = Depends(get_db)):
             password_hash=hash_password(body.password),
             name=body.name,
             phone=body.phone,
+            is_admin=email_is_admin(body.email),
         )
         db.add(user)
         db.flush()
@@ -170,6 +173,21 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == body.email).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="Account is disabled")
+    token = create_access_token(user.id, user.email)
+    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+
+
+@router.post("/auth/admin-login", response_model=TokenResponse)
+def admin_login(body: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == body.email).first()
+    if not user or not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    if not user.is_active:
+        raise HTTPException(status_code=401, detail="Account is disabled")
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="This account does not have admin access")
     token = create_access_token(user.id, user.email)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 

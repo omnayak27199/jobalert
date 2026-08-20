@@ -1,3 +1,5 @@
+import { getToken } from "@/lib/auth";
+
 const ADMIN_KEY_STORAGE = "indiajob_admin_key";
 
 export function getAdminKey(): string {
@@ -9,10 +11,16 @@ export function saveAdminKey(key: string) {
   sessionStorage.setItem(ADMIN_KEY_STORAGE, key);
 }
 
+export function clearAdminKey() {
+  sessionStorage.removeItem(ADMIN_KEY_STORAGE);
+}
+
 function headers(): Record<string, string> {
   const h: Record<string, string> = { "Content-Type": "application/json" };
   const key = getAdminKey();
   if (key) h["X-Admin-Key"] = key;
+  const token = getToken();
+  if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
 }
 
@@ -20,6 +28,8 @@ function formHeaders(): Record<string, string> {
   const h: Record<string, string> = {};
   const key = getAdminKey();
   if (key) h["X-Admin-Key"] = key;
+  const token = getToken();
+  if (token) h["Authorization"] = `Bearer ${token}`;
   return h;
 }
 
@@ -66,6 +76,32 @@ export interface AdminJob {
   source_name: string;
 }
 
+export interface AdminJobDetail {
+  id: number;
+  title: string;
+  organization: string;
+  category: string;
+  scope: string;
+  state: string | null;
+  vacancies: number | null;
+  qualification: string | null;
+  description: string | null;
+  full_content: string | null;
+  last_date: string | null;
+  exam_date: string | null;
+  apply_url: string | null;
+  notification_url: string | null;
+  source_url: string;
+  source_name: string;
+  age_limit: string | null;
+  application_fee: string | null;
+  is_active: boolean;
+  is_verified: boolean;
+  published_date: string | null;
+  created_at: string;
+  updated_at: string | null;
+}
+
 export interface ManualJobInput {
   title: string;
   organization: string;
@@ -75,12 +111,15 @@ export interface ManualJobInput {
   vacancies?: number;
   qualification?: string;
   description?: string;
+  full_content?: string;
   last_date?: string;
   exam_date?: string;
   apply_url?: string;
   notification_url?: string;
   age_limit?: string;
   application_fee?: string;
+  is_active?: boolean;
+  is_verified?: boolean;
   send_alerts?: boolean;
 }
 
@@ -101,6 +140,10 @@ export function fetchAdminJobs(q?: string, active?: boolean) {
   return adminFetch<{ total: number; jobs: AdminJob[] }>(`/jobs?${params}`);
 }
 
+export function fetchAdminJob(id: number) {
+  return adminFetch<AdminJobDetail>(`/jobs/${id}`);
+}
+
 export function createManualJob(body: ManualJobInput) {
   return adminFetch<{ job_id: number; alerts: Record<string, number> }>("/jobs", {
     method: "POST",
@@ -108,7 +151,7 @@ export function createManualJob(body: ManualJobInput) {
   });
 }
 
-export function updateJob(id: number, body: Partial<ManualJobInput & { is_active?: boolean; is_verified?: boolean }>) {
+export function updateJob(id: number, body: Partial<ManualJobInput>) {
   return adminFetch(`/jobs/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 

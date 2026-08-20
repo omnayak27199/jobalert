@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   phone: string | null;
+  is_admin?: boolean;
 }
 
 export interface AuthResponse {
@@ -179,6 +180,20 @@ export async function login(
     method: "POST",
     body: JSON.stringify({ email, password }),
   });
+}
+
+export async function adminLogin(
+  email: string,
+  password: string
+): Promise<AuthResponse> {
+  return authFetch<AuthResponse>("/auth/admin-login", {
+    method: "POST",
+    body: JSON.stringify({ email, password }),
+  });
+}
+
+export async function getMe(): Promise<User> {
+  return authFetch<User>("/auth/me");
 }
 
 export async function getPreferences(): Promise<UserPreferences> {

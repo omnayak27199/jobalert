@@ -143,6 +143,15 @@ export function Header() {
 
           {user ? (
             <div className="hidden items-center sm:flex">
+              {user.is_admin && (
+                <Link
+                  href="/admin"
+                  className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold text-amber-800 hover:bg-amber-50"
+                >
+                  <Shield className="h-4 w-4" />
+                  <span className="hidden md:inline">Admin</span>
+                </Link>
+              )}
               <Link
                 href="/account"
                 className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-semibold text-sky-800 hover:bg-sky-50"
@@ -209,7 +218,18 @@ export function Header() {
             </div>
             <div className="mt-3 border-t border-slate-100 pt-3 sm:hidden">
               {user ? (
-                <div className="flex gap-2">
+                <div className="flex flex-col gap-2">
+                  {user.is_admin && (
+                    <Link
+                      href="/admin"
+                      onClick={() => setMobileOpen(false)}
+                      className="flex items-center justify-center gap-2 rounded-lg bg-amber-50 py-2.5 text-sm font-semibold text-amber-900"
+                    >
+                      <Shield className="h-4 w-4" />
+                      Admin Panel
+                    </Link>
+                  )}
+                  <div className="flex gap-2">
                   <Link
                     href="/account"
                     onClick={() => setMobileOpen(false)}
@@ -225,6 +245,7 @@ export function Header() {
                   >
                     Sign out
                   </button>
+                  </div>
                 </div>
               ) : (
                 <Link

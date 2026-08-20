@@ -6,6 +6,7 @@ from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.database import get_db
 from app.models.job import Job, JobCategory, JobScope
 from app.models.user import User
 from app.services.alerts import dispatch_alerts_for_new_jobs
+from app.services.auth import decode_token
 from app.services.cleanup_service import run_cleanup
 from app.services.date_parse import parse_flexible_date
 from app.services.ingestion import _to_enum_category, _to_enum_scope, fetch_and_store_all
@@ -25,11 +27,23 @@ from app.services.pdf_parser import parse_pdf
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
+admin_bearer = HTTPBearer(auto_error=False)
 
 
-def verify_admin(x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")):
-    if settings.admin_secret and x_admin_key != settings.admin_secret:
-        raise HTTPException(status_code=403, detail="Invalid admin key. Pass X-Admin-Key header.")
+def verify_admin(
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(admin_bearer),
+    db: Session = Depends(get_db),
+):
+    if settings.admin_secret and x_admin_key == settings.admin_secret:
+        return
+    if credentials:
+        payload = decode_token(credentials.credentials)
+        if payload:
+            user = db.query(User).filter(User.id == int(payload["sub"])).first()
+            if user and user.is_active and user.is_admin:
+                return
+    raise HTTPException(status_code=403, detail="Admin access required. Sign in as admin or pass X-Admin-Key.")
 
 
 class FetchResult(BaseModel):
@@ -75,9 +89,11 @@ class JobUpdateIn(BaseModel):
     organization: Optional[str] = None
     state: Optional[str] = None
     category: Optional[str] = None
+    scope: Optional[str] = None
     vacancies: Optional[int] = None
     qualification: Optional[str] = None
     description: Optional[str] = None
+    full_content: Optional[str] = None
     last_date: Optional[str] = None
     exam_date: Optional[str] = None
     apply_url: Optional[str] = None
@@ -99,6 +115,35 @@ class AdminJobOut(BaseModel):
     last_date: Optional[datetime]
     created_at: datetime
     source_name: str
+
+    class Config:
+        from_attributes = True
+
+
+class AdminJobDetailOut(BaseModel):
+    id: int
+    title: str
+    organization: str
+    category: str
+    scope: str
+    state: Optional[str]
+    vacancies: Optional[int]
+    qualification: Optional[str]
+    description: Optional[str]
+    full_content: Optional[str]
+    last_date: Optional[datetime]
+    exam_date: Optional[datetime]
+    apply_url: Optional[str]
+    notification_url: Optional[str]
+    source_url: str
+    source_name: str
+    age_limit: Optional[str]
+    application_fee: Optional[str]
+    is_active: bool
+    is_verified: bool
+    published_date: Optional[datetime]
+    created_at: datetime
+    updated_at: Optional[datetime]
 
     class Config:
         from_attributes = True
@@ -146,6 +191,34 @@ def _job_to_admin(job: Job) -> AdminJobOut:
         last_date=job.last_date,
         created_at=job.created_at,
         source_name=job.source_name,
+    )
+
+
+def _job_to_admin_detail(job: Job) -> AdminJobDetailOut:
+    return AdminJobDetailOut(
+        id=job.id,
+        title=job.title,
+        organization=job.organization,
+        category=job.category.value,
+        scope=job.scope.value,
+        state=job.state,
+        vacancies=job.vacancies,
+        qualification=job.qualification,
+        description=job.description,
+        full_content=job.full_content,
+        last_date=job.last_date,
+        exam_date=job.exam_date,
+        apply_url=job.apply_url,
+        notification_url=job.notification_url,
+        source_url=job.source_url,
+        source_name=job.source_name,
+        age_limit=job.age_limit,
+        application_fee=job.application_fee,
+        is_active=job.is_active,
+        is_verified=job.is_verified,
+        published_date=job.published_date,
+        created_at=job.created_at,
+        updated_at=job.updated_at,
     )
 
 
@@ -227,6 +300,18 @@ def list_admin_jobs(
     }
 
 
+@router.get("/admin/jobs/{job_id}", response_model=AdminJobDetailOut)
+def get_admin_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin),
+):
+    job = db.query(Job).filter(Job.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+    return _job_to_admin_detail(job)
+
+
 @router.post("/admin/jobs")
 async def create_manual_job(
     body: ManualJobIn,
@@ -294,6 +379,7 @@ def update_job(
         "vacancies",
         "qualification",
         "description",
+        "full_content",
         "apply_url",
         "notification_url",
         "age_limit",
@@ -307,6 +393,8 @@ def update_job(
 
     if body.category is not None:
         job.category = _to_enum_category(body.category)
+    if body.scope is not None:
+        job.scope = _to_enum_scope(body.scope)
     if body.last_date is not None or body.exam_date is not None:
         _apply_dates(job, body.last_date, body.exam_date)
 

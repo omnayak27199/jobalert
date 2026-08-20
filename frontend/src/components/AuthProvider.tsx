@@ -9,7 +9,7 @@ import {
 } from "react";
 import {
   clearAuth,
-  getStoredUser,
+  getMe,
   getToken,
   login as apiLogin,
   register as apiRegister,
@@ -28,6 +28,7 @@ interface AuthContextValue {
     phone?: string;
   }) => Promise<void>;
   logout: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -37,8 +38,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (getToken()) setUser(getStoredUser());
-    setIsLoading(false);
+    const token = getToken();
+    if (!token) {
+      setIsLoading(false);
+      return;
+    }
+    getMe()
+      .then((fresh) => {
+        saveAuth(token, fresh);
+        setUser(fresh);
+      })
+      .catch(() => {
+        clearAuth();
+        setUser(null);
+      })
+      .finally(() => setIsLoading(false));
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -66,8 +80,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const token = getToken();
+    if (!token) {
+      setUser(null);
+      return;
+    }
+    const fresh = await getMe();
+    saveAuth(token, fresh);
+    setUser(fresh);
+  }, []);
+
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -92,6 +92,8 @@ class Settings(BaseSettings):
 
     # Admin upload/fetch (set in production)
     admin_secret: Optional[str] = None
+    # Comma-separated emails that receive admin panel access (login + JWT)
+    admin_emails: Union[str, List[str]] = []
 
     # Skip the heavy scrape on container boot (scheduled fetch still runs).
     skip_initial_fetch: bool = False
@@ -100,6 +102,16 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, value: object) -> List[str]:
         return _parse_cors_origins(value)
+
+    @field_validator("admin_emails", mode="before")
+    @classmethod
+    def parse_admin_emails(cls, value: object) -> List[str]:
+        parsed = _parse_cors_origins(value)
+        return [email.lower() for email in parsed]
+
+    @property
+    def admin_email_set(self) -> set[str]:
+        return {email.lower() for email in self.admin_emails}
 
     @model_validator(mode="after")
     def append_public_site_to_cors(self) -> "Settings":

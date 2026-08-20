@@ -5,6 +5,8 @@ import {
   FileUp,
   LayoutDashboard,
   List,
+  LogOut,
+  Pencil,
   PlusCircle,
   RefreshCw,
   Settings,
@@ -12,14 +14,18 @@ import {
   Upload,
   Users,
   Wrench,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/components/AuthProvider";
 import {
   activateJob,
+  clearAdminKey,
   createManualJob,
   deactivateJob,
   dispatchJobAlerts,
+  fetchAdminJob,
   fetchAdminJobs,
   fetchAdminUsers,
   fetchDashboard,
@@ -30,11 +36,14 @@ import {
   triggerEnrichAll,
   triggerFetch,
   triggerRepair,
+  updateJob,
   uploadPdf,
   type AdminDashboard,
   type AdminJob,
+  type AdminJobDetail,
   type AdminUser,
 } from "@/lib/admin";
+import { adminLogin, saveAuth } from "@/lib/auth";
 import { CATEGORY_LABELS, INDIAN_STATES, type JobCategory } from "@/lib/types";
 
 type Tab = "dashboard" | "users" | "create" | "upload" | "jobs" | "system";
@@ -57,18 +66,58 @@ const EMPTY_FORM = {
   vacancies: "",
   qualification: "",
   description: "",
+  full_content: "",
   last_date: "",
   exam_date: "",
   apply_url: "",
   notification_url: "",
   age_limit: "",
   application_fee: "",
+  is_active: true,
+  is_verified: true,
   send_alerts: true,
 };
 
+function toEditDate(iso: string | null | undefined): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const year = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function jobToEditForm(job: AdminJobDetail) {
+  return {
+    title: job.title,
+    organization: job.organization,
+    state: job.state || "",
+    category: job.category,
+    scope: job.scope,
+    vacancies: job.vacancies != null ? String(job.vacancies) : "",
+    qualification: job.qualification || "",
+    description: job.description || "",
+    full_content: job.full_content || "",
+    last_date: toEditDate(job.last_date),
+    exam_date: toEditDate(job.exam_date),
+    apply_url: job.apply_url || "",
+    notification_url: job.notification_url || "",
+    age_limit: job.age_limit || "",
+    application_fee: job.application_fee || "",
+    is_active: job.is_active,
+    is_verified: job.is_verified,
+    send_alerts: false,
+  };
+}
+
 export default function AdminPage() {
+  const { user, refreshUser } = useAuth();
   const [tab, setTab] = useState<Tab>("dashboard");
   const [adminKey, setAdminKey] = useState("");
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [showKeyLogin, setShowKeyLogin] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -82,6 +131,8 @@ export default function AdminPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [pdfMeta, setPdfMeta] = useState({ state: "", organization: "", title: "", apply_url: "", notification_url: "", send_alerts: true });
+  const [editingJob, setEditingJob] = useState<AdminJobDetail | null>(null);
+  const [editForm, setEditForm] = useState(EMPTY_FORM);
 
   const clearStatus = () => {
     setMessage(null);
@@ -116,12 +167,20 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    const saved = getAdminKey();
-    if (saved) {
-      setAdminKey(saved);
+    if (user?.is_admin) {
       setAuthenticated(true);
+      return;
     }
-  }, []);
+    const saved = getAdminKey();
+    if (!saved) return;
+    setAdminKey(saved);
+    fetchDashboard()
+      .then(() => setAuthenticated(true))
+      .catch(() => {
+        clearAdminKey();
+        setAuthenticated(false);
+      });
+  }, [user]);
 
   useEffect(() => {
     if (!authenticated) return;
@@ -130,7 +189,26 @@ export default function AdminPage() {
     if (tab === "jobs") loadJobs(jobSearch).catch((e) => setError(String(e)));
   }, [authenticated, tab, loadDashboard, loadUsers, loadJobs, jobSearch, userSearch]);
 
-  const handleLogin = async () => {
+  const handleAdminLogin = async () => {
+    clearStatus();
+    if (!loginEmail.trim() || !loginPassword) {
+      setError("Enter admin email and password");
+      return;
+    }
+    setLoading(true);
+    try {
+      const res = await adminLogin(loginEmail.trim(), loginPassword);
+      saveAuth(res.access_token, res.user);
+      await refreshUser();
+      setAuthenticated(true);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Admin login failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyLogin = async () => {
     clearStatus();
     if (!adminKey.trim()) {
       setError("Enter your admin key from backend/.env (ADMIN_SECRET)");
@@ -142,12 +220,54 @@ export default function AdminPage() {
       await fetchDashboard();
       setAuthenticated(true);
     } catch (e) {
-      sessionStorage.removeItem("indiajob_admin_key");
+      clearAdminKey();
       setError(e instanceof Error ? e.message : "Invalid admin key");
     } finally {
       setLoading(false);
     }
   };
+
+  const handleAdminLogout = () => {
+    clearAdminKey();
+    setAuthenticated(false);
+    setEditingJob(null);
+    clearStatus();
+  };
+
+  const openEditJob = (jobId: number) =>
+    run(async () => {
+      const job = await fetchAdminJob(jobId);
+      setEditingJob(job);
+      setEditForm(jobToEditForm(job));
+    });
+
+  const handleSaveEdit = () =>
+    run(async () => {
+      if (!editingJob) return;
+      await updateJob(editingJob.id, {
+        title: editForm.title,
+        organization: editForm.organization,
+        category: editForm.category,
+        scope: editForm.scope,
+        state: editForm.state || undefined,
+        vacancies: editForm.vacancies ? Number(editForm.vacancies) : undefined,
+        qualification: editForm.qualification || undefined,
+        description: editForm.description || undefined,
+        full_content: editForm.full_content || undefined,
+        last_date: editForm.last_date || undefined,
+        exam_date: editForm.exam_date || undefined,
+        apply_url: editForm.apply_url || undefined,
+        notification_url: editForm.notification_url || undefined,
+        age_limit: editForm.age_limit || undefined,
+        application_fee: editForm.application_fee || undefined,
+        is_active: editForm.is_active,
+        is_verified: editForm.is_verified,
+      });
+      setMessage(`Job #${editingJob.id} updated`);
+      setEditingJob(null);
+      await loadJobs(jobSearch);
+      await loadDashboard();
+    });
 
   const handleCreate = () =>
     run(async () => {
@@ -193,26 +313,69 @@ export default function AdminPage() {
   if (!authenticated) {
     return (
       <div className="mx-auto flex min-h-[60vh] max-w-md flex-col justify-center px-4">
-        <h1 className="text-2xl font-bold text-slate-900">IndiaJob Admin</h1>
-        <p className="mt-1 text-sm text-slate-500">Enter admin key to manage jobs and alerts</p>
-        <input
-          type="password"
-          value={adminKey}
-          onChange={(e) => setAdminKey(e.target.value)}
-          placeholder="ADMIN_SECRET from server .env"
-          className="mt-6 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm"
-        />
+        <h1 className="text-2xl font-bold text-slate-900">IndiaGovJob Admin</h1>
+        <p className="mt-1 text-sm text-slate-500">Sign in with your admin account to manage jobs</p>
+
+        <div className="mt-6 space-y-3">
+          <input
+            type="email"
+            value={loginEmail}
+            onChange={(e) => setLoginEmail(e.target.value)}
+            placeholder="Admin email"
+            className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm"
+          />
+          <input
+            type="password"
+            value={loginPassword}
+            onChange={(e) => setLoginPassword(e.target.value)}
+            placeholder="Password"
+            className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm"
+          />
+          <button
+            type="button"
+            onClick={handleAdminLogin}
+            disabled={loading}
+            className="w-full rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
+          >
+            {loading ? "Signing in..." : "Sign in as Admin"}
+          </button>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowKeyLogin(!showKeyLogin)}
+          className="mt-4 text-sm text-slate-500 hover:text-sky-700"
+        >
+          {showKeyLogin ? "Hide admin key login" : "Use admin key instead"}
+        </button>
+
+        {showKeyLogin && (
+          <div className="mt-3 space-y-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <input
+              type="password"
+              value={adminKey}
+              onChange={(e) => setAdminKey(e.target.value)}
+              placeholder="ADMIN_SECRET from server .env"
+              className="w-full rounded-lg border border-slate-200 px-4 py-3 text-sm"
+            />
+            <button
+              type="button"
+              onClick={handleKeyLogin}
+              disabled={loading}
+              className="w-full rounded-lg border border-sky-700 px-4 py-2.5 text-sm font-semibold text-sky-700 hover:bg-sky-50 disabled:opacity-50"
+            >
+              Enter with Admin Key
+            </button>
+          </div>
+        )}
+
         {error && (
           <div className="mt-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
-        <button
-          type="button"
-          onClick={handleLogin}
-          disabled={loading}
-          className="mt-4 rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
-        >
-          {loading ? "Checking key..." : "Enter Admin Panel"}
-        </button>
+
+        <p className="mt-6 text-xs text-slate-400">
+          Admin access is limited to accounts listed in ADMIN_EMAILS on the server. Normal users cannot see this panel.
+        </p>
       </div>
     );
   }
@@ -221,14 +384,29 @@ export default function AdminPage() {
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">IndiaJob Admin Panel</h1>
+          <h1 className="text-2xl font-bold text-slate-900">IndiaGovJob Admin Panel</h1>
           <p className="mt-1 text-sm text-slate-500">
             Upload notifications, create alerts manually, and control the portal
           </p>
         </div>
-        <Link href="/" className="text-sm font-medium text-sky-700 hover:underline">
-          ← Back to site
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          {user?.is_admin && (
+            <span className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900">
+              {user.email}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleAdminLogout}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+          >
+            <LogOut className="h-4 w-4" />
+            Exit admin
+          </button>
+          <Link href="/" className="text-sm font-medium text-sky-700 hover:underline">
+            ← Back to site
+          </Link>
+        </div>
       </div>
 
       <nav className="mt-6 flex flex-wrap gap-2 border-b border-slate-200 pb-3">
@@ -432,7 +610,8 @@ export default function AdminPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-wrap gap-1">
-                        <Link href={`/job/${job.id}`} className="rounded bg-sky-50 px-2 py-1 text-xs text-sky-800 hover:bg-sky-100">View</Link>
+                        <Link href={`/job/${job.id}`} target="_blank" className="rounded bg-sky-50 px-2 py-1 text-xs text-sky-800 hover:bg-sky-100">View</Link>
+                        <ActionBtn label="Edit" icon={Pencil} onClick={() => openEditJob(job.id)} />
                         <ActionBtn label="Alert" icon={Bell} onClick={() => run(async () => {
                           const r = await dispatchJobAlerts(job.id);
                           setMessage(`Alerts sent — email: ${r.email_sent ?? 0}, WhatsApp: ${r.whatsapp_sent ?? 0}`);
@@ -511,6 +690,115 @@ export default function AdminPage() {
           />
         </div>
       )}
+
+      {editingJob && (
+        <JobEditModal
+          job={editingJob}
+          form={editForm}
+          loading={loading}
+          onChange={setEditForm}
+          onClose={() => setEditingJob(null)}
+          onSave={handleSaveEdit}
+        />
+      )}
+    </div>
+  );
+}
+
+function JobEditModal({
+  job,
+  form,
+  loading,
+  onChange,
+  onClose,
+  onSave,
+}: {
+  job: AdminJobDetail;
+  form: typeof EMPTY_FORM;
+  loading: boolean;
+  onChange: (form: typeof EMPTY_FORM) => void;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 pt-10">
+      <div className="w-full max-w-3xl rounded-xl border border-slate-200 bg-white shadow-xl">
+        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+          <div>
+            <h2 className="text-lg font-bold text-slate-900">Edit Job #{job.id}</h2>
+            <p className="text-xs text-slate-500">{job.source_name} · {job.source_url}</p>
+          </div>
+          <button type="button" onClick={onClose} className="rounded-lg p-2 text-slate-400 hover:bg-slate-100">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <form
+          className="max-h-[70vh] space-y-4 overflow-y-auto p-6"
+          onSubmit={(e) => { e.preventDefault(); onSave(); }}
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Field label="Title *" value={form.title} onChange={(v) => onChange({ ...form, title: v })} required />
+            <Field label="Organization *" value={form.organization} onChange={(v) => onChange({ ...form, organization: v })} required />
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">State</label>
+              <select value={form.state} onChange={(e) => onChange({ ...form, state: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                <option value="">All India / Central</option>
+                {INDIAN_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Category</label>
+              <select value={form.category} onChange={(e) => onChange({ ...form, category: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                {(Object.keys(CATEGORY_LABELS) as JobCategory[]).map((c) => (
+                  <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-slate-700">Scope</label>
+              <select value={form.scope} onChange={(e) => onChange({ ...form, scope: e.target.value })} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                <option value="all_india">All India</option>
+                <option value="central">Central</option>
+                <option value="state">State</option>
+              </select>
+            </div>
+            <Field label="Vacancies" value={form.vacancies} onChange={(v) => onChange({ ...form, vacancies: v })} type="number" />
+            <Field label="Qualification" value={form.qualification} onChange={(v) => onChange({ ...form, qualification: v })} />
+            <Field label="Last Date (DD/MM/YYYY)" value={form.last_date} onChange={(v) => onChange({ ...form, last_date: v })} />
+            <Field label="Exam Date" value={form.exam_date} onChange={(v) => onChange({ ...form, exam_date: v })} />
+            <Field label="Apply URL" value={form.apply_url} onChange={(v) => onChange({ ...form, apply_url: v })} />
+            <Field label="Notification PDF URL" value={form.notification_url} onChange={(v) => onChange({ ...form, notification_url: v })} />
+            <Field label="Age Limit" value={form.age_limit} onChange={(v) => onChange({ ...form, age_limit: v })} />
+            <Field label="Application Fee" value={form.application_fee} onChange={(v) => onChange({ ...form, application_fee: v })} />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Description / Overview</label>
+            <textarea value={form.description} onChange={(e) => onChange({ ...form, description: e.target.value })} rows={3} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-slate-700">Full content (raw text)</label>
+            <textarea value={form.full_content} onChange={(e) => onChange({ ...form, full_content: e.target.value })} rows={4} className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono" />
+          </div>
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={form.is_active} onChange={(e) => onChange({ ...form, is_active: e.target.checked })} />
+              Active (visible on site)
+            </label>
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input type="checkbox" checked={form.is_verified} onChange={(e) => onChange({ ...form, is_verified: e.target.checked })} />
+              Verified badge
+            </label>
+          </div>
+          <div className="flex justify-end gap-2 border-t border-slate-100 pt-4">
+            <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+              Cancel
+            </button>
+            <button type="submit" disabled={loading} className="rounded-lg bg-emerald-700 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50">
+              {loading ? "Saving..." : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
