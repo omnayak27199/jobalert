@@ -137,6 +137,15 @@ class MatchedJobOut(BaseModel):
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
 
+def _ensure_configured_admin(user: User, db: Session) -> User:
+    """Promote user when their email is listed in ADMIN_EMAILS."""
+    if not user.is_admin and email_is_admin(user.email):
+        user.is_admin = True
+        db.commit()
+        db.refresh(user)
+    return user
+
+
 @router.post("/auth/register", response_model=TokenResponse)
 def register(body: RegisterRequest, db: Session = Depends(get_db)):
     try:
@@ -175,6 +184,7 @@ def login(body: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Account is disabled")
+    user = _ensure_configured_admin(user, db)
     token = create_access_token(user.id, user.email)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
 
@@ -186,6 +196,7 @@ def admin_login(body: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=401, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=401, detail="Account is disabled")
+    user = _ensure_configured_admin(user, db)
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="This account does not have admin access")
     token = create_access_token(user.id, user.email)
@@ -193,7 +204,8 @@ def admin_login(body: LoginRequest, db: Session = Depends(get_db)):
 
 
 @router.get("/auth/me", response_model=UserOut)
-def me(user: User = Depends(get_current_user)):
+def me(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    user = _ensure_configured_admin(user, db)
     return user
 
 

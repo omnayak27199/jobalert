@@ -376,6 +376,15 @@ export default function AdminPage() {
         <p className="mt-6 text-xs text-slate-400">
           Admin access is limited to accounts listed in ADMIN_EMAILS on the server. Normal users cannot see this panel.
         </p>
+        <p className="mt-3 text-center text-sm text-slate-500">
+          <Link href="/login" className="font-medium text-sky-700 hover:underline">
+            ← Back to user sign in
+          </Link>
+          {" · "}
+          <Link href="/register" className="font-medium text-sky-700 hover:underline">
+            Create account
+          </Link>
+        </p>
       </div>
     );
   }

@@ -8,6 +8,7 @@ import {
   Mail,
   MessageCircle,
   Save,
+  Shield,
   Sparkles,
   User,
 } from "lucide-react";
@@ -190,6 +191,15 @@ export default function AccountPage() {
         <p className="mt-1 text-sm text-slate-500">
           Welcome, {user.name} · {user.email}
         </p>
+        {user.is_admin && (
+          <Link
+            href="/admin"
+            className="mt-3 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-900 ring-1 ring-amber-200 hover:bg-amber-100"
+          >
+            <Shield className="h-4 w-4" />
+            Open Admin Panel
+          </Link>
+        )}
       </div>
 
       <div className="mb-6 flex flex-wrap gap-2 border-b border-slate-200">

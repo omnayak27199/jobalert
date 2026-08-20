@@ -20,7 +20,7 @@ import {
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
   register: (data: {
     email: string;
     password: string;
@@ -59,6 +59,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await apiLogin(email, password);
     saveAuth(res.access_token, res.user);
     setUser(res.user);
+    return res.user;
   }, []);
 
   const register = useCallback(

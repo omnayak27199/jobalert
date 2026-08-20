@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { Shield } from "lucide-react";
 import { useState } from "react";
 import { useAuth } from "@/components/AuthProvider";
 
@@ -14,7 +15,7 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
 
   if (user) {
-    router.replace("/account");
+    router.replace(user.is_admin ? "/admin" : "/account");
     return null;
   }
 
@@ -23,8 +24,8 @@ export default function LoginPage() {
     setError("");
     setLoading(true);
     try {
-      await login(email, password);
-      router.push("/account");
+      const loggedIn = await login(email, password);
+      router.push(loggedIn.is_admin ? "/admin" : "/account");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -85,6 +86,19 @@ export default function LoginPage() {
             Create free account
           </Link>
         </p>
+
+        <div className="mt-6 border-t border-slate-100 pt-5">
+          <Link
+            href="/admin"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-semibold text-amber-900 hover:bg-amber-100"
+          >
+            <Shield className="h-4 w-4" />
+            Admin login
+          </Link>
+          <p className="mt-2 text-center text-xs text-slate-400">
+            For site administrators only
+          </p>
+        </div>
       </div>
     </div>
   );
