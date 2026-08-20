@@ -1,8 +1,20 @@
 FROM node:20-alpine AS builder
 
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
+
+# Copy lockfile + npm retry settings before source (better layer cache).
+COPY package*.json .npmrc ./
+RUN --mount=type=cache,target=/root/.npm \
+    set -e; \
+    for attempt in 1 2 3 4 5; do \
+      echo "npm ci attempt ${attempt}/5..."; \
+      npm ci --no-audit --no-fund && exit 0; \
+      echo "npm ci failed (network?), waiting 20s before retry..."; \
+      sleep 20; \
+    done; \
+    echo "npm ci failed after 5 attempts"; \
+    exit 1
+
 COPY . .
 
 ARG API_URL=http://backend:8000

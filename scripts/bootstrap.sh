@@ -10,11 +10,8 @@ git pull origin main
 echo "==> Fix .env"
 bash "$ROOT/scripts/fix-env.sh"
 
-echo "==> Rebuild backend (exclude .env from image)"
-docker compose build --no-cache backend
-
-echo "==> Rebuild frontend (API proxy for login/register)"
-docker compose build --no-cache frontend
+echo "==> Rebuild images (retries npm network failures on small VMs)"
+bash "$ROOT/scripts/docker-build.sh" --fresh backend frontend
 
 echo "==> Start stack"
 docker compose up -d --force-recreate

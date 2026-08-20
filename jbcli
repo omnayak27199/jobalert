@@ -43,6 +43,7 @@ Commands:
   doctor            Validate backend/.env before Docker start
   pull              Git pull latest code
   update            git pull + fix .env + docker rebuild + verify
+  update --fresh    same as update but docker build --no-cache (slow)
   fix-env           Fix backend/.env typos and create from template if missing
   docker ps         Show container status
   docker build      Build Docker images
@@ -128,7 +129,7 @@ cmd_docker_ps() {
 
 cmd_docker_build() {
   header "Docker build"
-  docker compose build
+  bash "$ROOT/scripts/docker-build.sh" "$@"
   ok "Build complete."
 }
 
@@ -157,13 +158,24 @@ cmd_docker_logs() {
 }
 
 cmd_update() {
+  local fresh=0
+  for arg in "$@"; do
+    case "$arg" in
+      --fresh | --no-cache) fresh=1 ;;
+    esac
+  done
+
   header "Update deployment"
   info "Step 1/5 — git pull"
   git pull origin main
   info "Step 2/5 — fix backend/.env"
   bash "$ROOT/scripts/fix-env.sh"
-  info "Step 3/5 — rebuild images (backend + frontend)"
-  docker compose build --no-cache backend frontend
+  info "Step 3/5 — rebuild images (backend + frontend, with retries)"
+  if [[ "$fresh" -eq 1 ]]; then
+    bash "$ROOT/scripts/docker-build.sh" --fresh backend frontend
+  else
+    bash "$ROOT/scripts/docker-build.sh" backend frontend
+  fi
   info "Step 4/5 — recreate containers"
   docker compose up -d --force-recreate
   info "Step 5/5 — verify"
