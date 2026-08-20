@@ -108,7 +108,7 @@ export function Header() {
           </div>
           <div className="hidden sm:block">
             <span className="text-lg font-bold leading-none tracking-tight text-slate-900">
-              IndiaJob<span className="text-sky-700">.in</span>
+              IndiaGovJob<span className="text-sky-700">.online</span>
             </span>
           </div>
         </Link>
@@ -254,12 +254,12 @@ export function Footer() {
                 <span className="text-sm font-black text-white">IJ</span>
               </div>
               <div>
-                <span className="text-lg font-bold text-white">IndiaJob</span>
-                <span className="text-sm font-semibold text-sky-400">.in</span>
+                <span className="text-lg font-bold text-white">IndiaGovJob</span>
+                <span className="text-sm font-semibold text-sky-400">.online</span>
               </div>
             </div>
             <p className="text-sm leading-relaxed text-slate-400">
-              India&apos;s government job portal — recruitment notifications,
+              India&apos;s sarkari naukri portal — government job notifications,
               vacancies, eligibility, last dates and official apply links from
               verified sources.
             </p>
@@ -299,6 +299,25 @@ export function Footer() {
 
           <div>
             <h4 className="mb-4 text-sm font-bold uppercase tracking-wider text-white">
+              Company
+            </h4>
+            <ul className="space-y-2.5 text-sm">
+              {[
+                ["/about", "About Us"],
+                ["/contact", "Contact"],
+                ["/privacy", "Privacy Policy"],
+              ].map(([href, label]) => (
+                <li key={href}>
+                  <Link href={href} className="text-slate-400 hover:text-white">
+                    {label}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          <div>
+            <h4 className="mb-4 text-sm font-bold uppercase tracking-wider text-white">
               Official Sources
             </h4>
             <ul className="space-y-2.5 text-sm text-slate-400">
@@ -313,15 +332,15 @@ export function Footer() {
 
         <div className="mt-10 rounded-lg border border-slate-700 bg-slate-800/50 p-4">
           <p className="text-xs leading-relaxed text-slate-400">
-            <strong className="text-slate-300">Disclaimer:</strong> IndiaJob.in
-            publishes government job recruitment notifications only. We are not
+            <strong className="text-slate-300">Disclaimer:</strong> IndiaGovJob.online
+            publishes government job and sarkari naukri notifications only. We are not
             affiliated with UPSC, SSC, RRB, IBPS or any recruiting agency.
             Always verify details and apply only through official portals.
           </p>
         </div>
 
         <div className="mt-8 flex flex-col items-center justify-between gap-4 border-t border-slate-700 pt-6 text-xs text-slate-500 sm:flex-row">
-          <p>© {new Date().getFullYear()} IndiaJob.in — All rights reserved.</p>
+          <p>© {new Date().getFullYear()} IndiaGovJob.online — All rights reserved.</p>
           <p>Made for job seekers across India 🇮🇳</p>
         </div>
       </div>

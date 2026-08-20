@@ -13,6 +13,8 @@ import { JobActions } from "@/components/JobActions";
 import { JobAdvertisement } from "@/components/JobAdvertisement";
 import { RelatedJobs } from "@/components/RelatedJobs";
 import { getJob } from "@/lib/api";
+import { buildJobMetadata, jobPostingJsonLd } from "@/lib/seo";
+import { JsonLd } from "@/components/JsonLd";
 import {
   formatDate,
   getCategoryAccent,
@@ -31,12 +33,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const { id } = await params;
   try {
     const job = await getJob(Number(id));
-    return {
-      title: `${job.title} | IndiaJob`,
-      description: `${job.organization} recruitment — vacancies, last date, eligibility and official apply link.`,
-    };
+    return buildJobMetadata(job);
   } catch {
-    return { title: "Job Notification | IndiaJob" };
+    return { title: "Job Notification" };
   }
 }
 
@@ -111,6 +110,7 @@ export default async function JobDetailPage({ params }: PageProps) {
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <JsonLd data={jobPostingJsonLd(job)} />
       <nav className="mb-6 flex flex-wrap items-center gap-2 text-sm text-slate-500">
         <Link href="/" className="hover:text-sky-700">Home</Link>
         <span>/</span>

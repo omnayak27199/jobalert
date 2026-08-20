@@ -154,7 +154,7 @@ export default async function HomePage() {
 
           <div className="rounded-xl border border-sky-100 bg-sky-50 p-5">
             <h3 className="text-sm font-bold text-sky-900">
-              Why IndiaJob.in?
+              Why IndiaGovJob?
             </h3>
             <ul className="mt-3 grid gap-2.5 sm:grid-cols-2">
               {[

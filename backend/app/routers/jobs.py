@@ -111,6 +111,11 @@ class StatsOut(BaseModel):
     verified_jobs: int
 
 
+class SitemapEntryOut(BaseModel):
+    id: int
+    last_modified: Optional[datetime]
+
+
 def _job_to_out(job: Job, *, deep_sections: bool = False) -> JobOut:
     window = compute_application_window(job.last_date)
     days_left = window["days_left"]
@@ -348,6 +353,33 @@ def list_news(
         query = query.filter(NewsItem.is_important == True)  # noqa: E712
     items = query.order_by(desc(NewsItem.published_at)).limit(limit).all()
     return items
+
+
+@router.get("/seo/sitemap", response_model=List[SitemapEntryOut])
+def seo_sitemap(response: Response, db: Session = Depends(get_db)):
+    """Lightweight job IDs for Next.js sitemap.xml generation."""
+    response.headers["Cache-Control"] = "public, max-age=3600"
+    notif = JobCategory.NOTIFICATION
+    cutoff = closed_visibility_cutoff()
+    jobs = (
+        db.query(Job)
+        .filter(
+            Job.is_active == True,  # noqa: E712
+            Job.category == notif,
+            (Job.last_date.is_(None)) | (Job.last_date >= cutoff),
+        )
+        .order_by(desc(Job.published_date))
+        .limit(5000)
+        .all()
+    )
+    return [
+        SitemapEntryOut(
+            id=job.id,
+            last_modified=job.published_date or job.created_at,
+        )
+        for job in jobs
+        if is_publishable_job(job)
+    ]
 
 
 @router.get("/stats", response_model=StatsOut)

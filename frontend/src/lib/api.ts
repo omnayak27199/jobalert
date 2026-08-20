@@ -61,6 +61,15 @@ export async function getStates(): Promise<import("./types").StateCount[]> {
   return fetchApi<import("./types").StateCount[]>("/states", 120);
 }
 
+export interface SitemapEntry {
+  id: number;
+  last_modified: string | null;
+}
+
+export async function getSitemapEntries(): Promise<SitemapEntry[]> {
+  return fetchApi<SitemapEntry[]>("/seo/sitemap", 3600);
+}
+
 export async function triggerFetch(): Promise<{ jobs: number; news: number }> {
   const base = getApiBase();
   const res = await fetch(`${base}/fetch`, { method: "POST", cache: "no-store" });
