@@ -73,11 +73,11 @@ docker_backend_running() {
 
 run_python_ops() {
   local cmd=("$@")
-  if docker_backend_running; then
-    docker compose exec -T backend python -m app.jbcli_ops "${cmd[@]}"
-  elif docker_available; then
-    warn "Backend not running — using one-off container"
-    docker compose run --rm --no-deps backend python -m app.jbcli_ops "${cmd[@]}"
+  if docker_available; then
+    # Mount host backend/app so git pull works without rebuilding the image for CLI ops.
+    docker compose run --rm --no-deps \
+      -v "$ROOT/backend/app:/app/app:ro" \
+      backend python -m app.jbcli_ops "${cmd[@]}"
   else
     (cd "$ROOT/backend" && python -m app.jbcli_ops "${cmd[@]}")
   fi
