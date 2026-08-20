@@ -10,6 +10,7 @@ import {
   Settings,
   Trash2,
   Upload,
+  Users,
   Wrench,
 } from "lucide-react";
 import Link from "next/link";
@@ -20,6 +21,7 @@ import {
   deactivateJob,
   dispatchJobAlerts,
   fetchAdminJobs,
+  fetchAdminUsers,
   fetchDashboard,
   getAdminKey,
   reEnrichJob,
@@ -31,13 +33,15 @@ import {
   uploadPdf,
   type AdminDashboard,
   type AdminJob,
+  type AdminUser,
 } from "@/lib/admin";
 import { CATEGORY_LABELS, INDIAN_STATES, type JobCategory } from "@/lib/types";
 
-type Tab = "dashboard" | "create" | "upload" | "jobs" | "system";
+type Tab = "dashboard" | "users" | "create" | "upload" | "jobs" | "system";
 
 const TABS: { id: Tab; label: string; icon: typeof LayoutDashboard }[] = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { id: "users", label: "Users", icon: Users },
   { id: "create", label: "Create Alert", icon: PlusCircle },
   { id: "upload", label: "Upload PDF", icon: FileUp },
   { id: "jobs", label: "Manage Jobs", icon: List },
@@ -71,6 +75,8 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [dashboard, setDashboard] = useState<AdminDashboard | null>(null);
+  const [users, setUsers] = useState<AdminUser[]>([]);
+  const [userSearch, setUserSearch] = useState("");
   const [jobs, setJobs] = useState<AdminJob[]>([]);
   const [jobSearch, setJobSearch] = useState("");
   const [form, setForm] = useState(EMPTY_FORM);
@@ -99,6 +105,11 @@ export default function AdminPage() {
     setDashboard(data);
   }, []);
 
+  const loadUsers = useCallback(async (q?: string) => {
+    const data = await fetchAdminUsers(q);
+    setUsers(data.users);
+  }, []);
+
   const loadJobs = useCallback(async (q?: string) => {
     const data = await fetchAdminJobs(q);
     setJobs(data.jobs);
@@ -115,13 +126,27 @@ export default function AdminPage() {
   useEffect(() => {
     if (!authenticated) return;
     if (tab === "dashboard") loadDashboard().catch((e) => setError(String(e)));
+    if (tab === "users") loadUsers(userSearch).catch((e) => setError(String(e)));
     if (tab === "jobs") loadJobs(jobSearch).catch((e) => setError(String(e)));
-  }, [authenticated, tab, loadDashboard, loadJobs, jobSearch]);
+  }, [authenticated, tab, loadDashboard, loadUsers, loadJobs, jobSearch, userSearch]);
 
-  const handleLogin = () => {
-    saveAdminKey(adminKey);
-    setAuthenticated(true);
+  const handleLogin = async () => {
     clearStatus();
+    if (!adminKey.trim()) {
+      setError("Enter your admin key from backend/.env (ADMIN_SECRET)");
+      return;
+    }
+    saveAdminKey(adminKey.trim());
+    setLoading(true);
+    try {
+      await fetchDashboard();
+      setAuthenticated(true);
+    } catch (e) {
+      sessionStorage.removeItem("indiajob_admin_key");
+      setError(e instanceof Error ? e.message : "Invalid admin key");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCreate = () =>
@@ -177,12 +202,16 @@ export default function AdminPage() {
           placeholder="ADMIN_SECRET from server .env"
           className="mt-6 w-full rounded-lg border border-slate-200 px-4 py-3 text-sm"
         />
+        {error && (
+          <div className="mt-3 rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
+        )}
         <button
           type="button"
           onClick={handleLogin}
-          className="mt-4 rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-800"
+          disabled={loading}
+          className="mt-4 rounded-lg bg-sky-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-sky-800 disabled:opacity-50"
         >
-          Enter Admin Panel
+          {loading ? "Checking key..." : "Enter Admin Panel"}
         </button>
       </div>
     );
@@ -240,6 +269,55 @@ export default function AdminPage() {
               <p className="mt-1 text-2xl font-bold text-slate-900">{val}</p>
             </div>
           ))}
+        </div>
+      )}
+
+      {tab === "users" && (
+        <div className="mt-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="text-lg font-bold text-slate-900">Registered Users ({users.length})</h2>
+            <input
+              type="search"
+              placeholder="Search email, name, phone..."
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              className="rounded-lg border border-slate-200 px-3 py-2 text-sm"
+            />
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 text-xs uppercase text-slate-500">
+                  <th className="py-2 pr-4">ID</th>
+                  <th className="py-2 pr-4">Name</th>
+                  <th className="py-2 pr-4">Email</th>
+                  <th className="py-2 pr-4">Phone</th>
+                  <th className="py-2">Joined</th>
+                </tr>
+              </thead>
+              <tbody>
+                {users.length === 0 ? (
+                  <tr>
+                    <td colSpan={5} className="py-6 text-center text-slate-500">
+                      No users found. Check admin key or wait for registrations.
+                    </td>
+                  </tr>
+                ) : (
+                  users.map((user) => (
+                    <tr key={user.id} className="border-b border-slate-100">
+                      <td className="py-2 pr-4 font-mono text-xs">{user.id}</td>
+                      <td className="py-2 pr-4">{user.name}</td>
+                      <td className="py-2 pr-4">{user.email}</td>
+                      <td className="py-2 pr-4">{user.phone || "—"}</td>
+                      <td className="py-2 text-slate-500">
+                        {new Date(user.created_at).toLocaleDateString("en-IN")}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 

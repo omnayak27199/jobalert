@@ -114,6 +114,17 @@ class DashboardOut(BaseModel):
     verified_jobs: int
 
 
+class AdminUserOut(BaseModel):
+    id: int
+    email: str
+    name: str
+    phone: Optional[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 def _apply_dates(job: Job, last_date: Optional[str], exam_date: Optional[str]) -> None:
     if last_date is not None:
         parsed = parse_flexible_date(last_date)
@@ -167,6 +178,28 @@ def admin_dashboard(
         states_covered=states,
         verified_jobs=verified,
     )
+
+
+@router.get("/admin/users")
+def list_admin_users(
+    limit: int = Query(100, le=500),
+    offset: int = Query(0, ge=0),
+    q: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin),
+):
+    query = db.query(User)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.filter(
+            or_(User.email.ilike(like), User.name.ilike(like), User.phone.ilike(like))
+        )
+    total = query.count()
+    users = query.order_by(desc(User.created_at)).offset(offset).limit(limit).all()
+    return {
+        "total": total,
+        "users": [AdminUserOut.model_validate(u) for u in users],
+    }
 
 
 @router.get("/admin/jobs")

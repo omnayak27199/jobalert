@@ -162,8 +162,8 @@ cmd_update() {
   git pull origin main
   info "Step 2/5 — fix backend/.env"
   bash "$ROOT/scripts/fix-env.sh"
-  info "Step 3/5 — rebuild backend image (no cache — drops baked .env)"
-  docker compose build --no-cache backend
+  info "Step 3/5 — rebuild images (backend + frontend)"
+  docker compose build --no-cache backend frontend
   info "Step 4/5 — recreate containers"
   docker compose up -d --force-recreate
   info "Step 5/5 — verify"

@@ -45,6 +45,14 @@ export interface AdminDashboard {
   verified_jobs: number;
 }
 
+export interface AdminUser {
+  id: number;
+  email: string;
+  name: string;
+  phone: string | null;
+  created_at: string;
+}
+
 export interface AdminJob {
   id: number;
   title: string;
@@ -78,6 +86,12 @@ export interface ManualJobInput {
 
 export function fetchDashboard() {
   return adminFetch<AdminDashboard>("/dashboard");
+}
+
+export function fetchAdminUsers(q?: string) {
+  const params = new URLSearchParams({ limit: "200" });
+  if (q) params.set("q", q);
+  return adminFetch<{ total: number; users: AdminUser[] }>(`/users?${params}`);
 }
 
 export function fetchAdminJobs(q?: string, active?: boolean) {
