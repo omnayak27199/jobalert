@@ -60,6 +60,7 @@ export interface AdminUser {
   email: string;
   name: string;
   phone: string | null;
+  is_admin: boolean;
   created_at: string;
 }
 
@@ -131,6 +132,12 @@ export function fetchAdminUsers(q?: string) {
   const params = new URLSearchParams({ limit: "200" });
   if (q) params.set("q", q);
   return adminFetch<{ total: number; users: AdminUser[] }>(`/users?${params}`);
+}
+
+export function deleteAdminUser(id: number) {
+  return adminFetch<{ status: string; user_id: number }>(`/users/${id}`, {
+    method: "DELETE",
+  });
 }
 
 export function fetchAdminJobs(q?: string, active?: boolean) {

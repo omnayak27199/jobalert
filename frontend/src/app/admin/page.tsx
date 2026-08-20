@@ -24,6 +24,7 @@ import {
   clearAdminKey,
   createManualJob,
   deactivateJob,
+  deleteAdminUser,
   dispatchJobAlerts,
   fetchAdminJob,
   fetchAdminJobs,
@@ -479,25 +480,52 @@ export default function AdminPage() {
                   <th className="py-2 pr-4">Name</th>
                   <th className="py-2 pr-4">Email</th>
                   <th className="py-2 pr-4">Phone</th>
-                  <th className="py-2">Joined</th>
+                  <th className="py-2 pr-4">Joined</th>
+                  <th className="py-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {users.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="py-6 text-center text-slate-500">
+                    <td colSpan={6} className="py-6 text-center text-slate-500">
                       No users found. Check admin key or wait for registrations.
                     </td>
                   </tr>
                 ) : (
-                  users.map((user) => (
-                    <tr key={user.id} className="border-b border-slate-100">
-                      <td className="py-2 pr-4 font-mono text-xs">{user.id}</td>
-                      <td className="py-2 pr-4">{user.name}</td>
-                      <td className="py-2 pr-4">{user.email}</td>
-                      <td className="py-2 pr-4">{user.phone || "—"}</td>
-                      <td className="py-2 text-slate-500">
-                        {new Date(user.created_at).toLocaleDateString("en-IN")}
+                  users.map((u) => (
+                    <tr key={u.id} className="border-b border-slate-100">
+                      <td className="py-2 pr-4 font-mono text-xs">{u.id}</td>
+                      <td className="py-2 pr-4">
+                        {u.name}
+                        {u.is_admin && (
+                          <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-amber-900">
+                            Admin
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-2 pr-4">{u.email}</td>
+                      <td className="py-2 pr-4">{u.phone || "—"}</td>
+                      <td className="py-2 pr-4 text-slate-500">
+                        {new Date(u.created_at).toLocaleDateString("en-IN")}
+                      </td>
+                      <td className="py-2">
+                        {u.is_admin ? (
+                          <span className="text-xs text-slate-400">Protected</span>
+                        ) : (
+                          <ActionBtn
+                            label="Delete"
+                            icon={Trash2}
+                            onClick={() => {
+                              if (!window.confirm(`Delete user ${u.email}? This cannot be undone.`)) return;
+                              run(async () => {
+                                await deleteAdminUser(u.id);
+                                await loadUsers(userSearch);
+                                await loadDashboard();
+                                setMessage(`Deleted user ${u.email}`);
+                              });
+                            }}
+                          />
+                        )}
                       </td>
                     </tr>
                   ))

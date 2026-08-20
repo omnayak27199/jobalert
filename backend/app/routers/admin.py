@@ -164,6 +164,7 @@ class AdminUserOut(BaseModel):
     email: str
     name: str
     phone: Optional[str]
+    is_admin: bool = False
     created_at: datetime
 
     class Config:
@@ -273,6 +274,22 @@ def list_admin_users(
         "total": total,
         "users": [AdminUserOut.model_validate(u) for u in users],
     }
+
+
+@router.delete("/admin/users/{user_id}")
+def delete_admin_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    if user.is_admin:
+        raise HTTPException(status_code=400, detail="Cannot delete an admin account")
+    db.delete(user)
+    db.commit()
+    return {"status": "deleted", "user_id": user_id}
 
 
 @router.get("/admin/jobs")
